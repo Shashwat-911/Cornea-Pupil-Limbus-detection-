@@ -18,6 +18,13 @@ across video, adapts to grayscale/IR sources, and handles the femtosecond-laser
 >   every module (read that for internals).
 
 ---
+##Real time Recording of Application
+
+
+https://github.com/user-attachments/assets/135ec84c-2733-41a3-b81c-079041c7823a
+
+
+---
 
 ## Table of Contents
 
