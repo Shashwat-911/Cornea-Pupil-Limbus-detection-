@@ -112,6 +112,16 @@ class AuditLogger:
     def debug(self, msg: str, *args: Any) -> None:
         self._py.debug(msg, *args)
 
+    def exception(self, msg: str, *args: Any, **kwargs: Any) -> None:
+        """Log at ERROR level with traceback information.
+
+        Mirrors ``logging.Logger.exception()`` so that GUI crash
+        handlers (``gui_app.py``) can call ``self.logger.exception(...)``
+        without raising ``AttributeError``.
+        """
+        kwargs.setdefault("exc_info", True)
+        self._py.error(msg, *args, **kwargs)
+
     # ── lifecycle ───────────────────────────────────────────────
 
     def close(self) -> None:
