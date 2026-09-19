@@ -1,0 +1,1 @@
+"""Annotation tool GUI components."""
