@@ -1,0 +1,26 @@
+{
+  "3.0": {
+    "target_angle_deg": 3.0,
+    "measured_torsion_deg": -2.9330321576456324,
+    "error_deg": 5.933032157645632,
+    "confidence": 0.40757735677357043,
+    "quality": "RESEARCH",
+    "offset_magnitude_ref_px": 12.205604014772506,
+    "offset_magnitude_rot_px": 10.246958435182432,
+    "offset_angle_ref_deg": 16.001297297274046,
+    "offset_angle_rot_deg": -4.133100354611235,
+    "offset_angle_error_deg": 23.13439765188528
+  },
+  "-3.0": {
+    "target_angle_deg": -3.0,
+    "measured_torsion_deg": 2.9457443556624456,
+    "error_deg": 5.945744355662446,
+    "confidence": 0.4570431960953503,
+    "quality": "RESEARCH",
+    "offset_magnitude_ref_px": 12.205604014772506,
+    "offset_magnitude_rot_px": 11.702110854161962,
+    "offset_angle_ref_deg": 16.001297297274046,
+    "offset_angle_rot_deg": 21.508462682563948,
+    "offset_angle_error_deg": 8.507165385289909
+  }
+}
