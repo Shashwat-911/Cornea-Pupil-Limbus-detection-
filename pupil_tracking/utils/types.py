@@ -774,3 +774,119 @@ class FitResult:
             "num_points": self.num_points,
             "method": self.method,
         }
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Registration / Cyclotorsion types
+# ──────────────────────────────────────────────────────────────────────
+
+class StreamName(Enum):
+    """Cyclotorsion detection stream identifiers."""
+    PHASE_CORRELATION = "phase_correlation"
+    DEEP_MATCHER = "deep_matcher"
+    INK_MARKERS = "ink_markers"
+    LIMBAL_VESSELS = "limbal_vessels"
+    CUSTOM_FEATURE = "custom_feature"
+
+
+@dataclass
+class StreamResult:
+    """Result from a single cyclotorsion detection stream.
+
+    Every stream produces a torsion angle (degrees), a confidence
+    score, and optional diagnostic metadata.
+    """
+    stream: StreamName = StreamName.PHASE_CORRELATION
+    torsion_deg: Optional[float] = None
+    confidence: float = 0.0
+    inlier_count: int = 0
+    processing_time_ms: float = 0.0
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def valid(self) -> bool:
+        return (self.torsion_deg is not None
+                and math.isfinite(self.torsion_deg)
+                and self.confidence > 0.0)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "stream": self.stream.value,
+            "torsion_deg": _sf(self.torsion_deg) if self.torsion_deg is not None else None,
+            "confidence": _sf(self.confidence),
+            "inlier_count": self.inlier_count,
+            "processing_time_ms": _sf(self.processing_time_ms),
+            "valid": self.valid,
+            "metadata": dict(self.metadata),
+        }
+
+
+class RegistrationQuality(Enum):
+    """Quality grade for a registration/cyclotorsion result."""
+    SURGICAL = "SURGICAL"        # ±0.1° accuracy, confidence ≥ 0.85
+    CLINICAL = "CLINICAL"        # ±0.5° accuracy, confidence ≥ 0.60
+    RESEARCH = "RESEARCH"        # ±2.0° accuracy, confidence ≥ 0.30
+    INSUFFICIENT = "INSUFFICIENT"
+    NO_RESULT = "NO_RESULT"
+
+
+_REG_GRADE_THRESHOLDS: List[Tuple[float, RegistrationQuality]] = [
+    (0.85, RegistrationQuality.SURGICAL),
+    (0.60, RegistrationQuality.CLINICAL),
+    (0.30, RegistrationQuality.RESEARCH),
+    (0.0,  RegistrationQuality.INSUFFICIENT),
+]
+
+
+def assign_registration_grade(confidence: float) -> RegistrationQuality:
+    """Assign a registration quality grade from a fused confidence."""
+    if confidence is None or not math.isfinite(confidence):
+        return RegistrationQuality.NO_RESULT
+    for threshold, grade in _REG_GRADE_THRESHOLDS:
+        if confidence >= threshold:
+            return grade
+    return RegistrationQuality.INSUFFICIENT
+
+
+@dataclass
+class RegistrationResult:
+    """Fused cyclotorsion result from all active streams.
+
+    This is the top-level output of the registration pipeline,
+    analogous to EyeDetectionResult for the detection pipeline.
+    """
+    valid: bool = False
+    torsion_deg: float = 0.0
+    confidence: float = 0.0
+    quality: RegistrationQuality = RegistrationQuality.NO_RESULT
+
+    # Per-stream breakdown
+    stream_results: Dict[str, StreamResult] = field(default_factory=dict)
+    active_streams: int = 0
+    agreeing_streams: int = 0
+
+    # Uncertainty
+    torsion_std_deg: float = 0.0
+    confidence_interval_deg: Tuple[float, float] = (0.0, 0.0)
+
+    # Timing
+    total_processing_time_ms: float = 0.0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "valid": self.valid,
+            "torsion_deg": _sf(self.torsion_deg),
+            "confidence": _sf(self.confidence),
+            "quality": self.quality.value,
+            "active_streams": self.active_streams,
+            "agreeing_streams": self.agreeing_streams,
+            "torsion_std_deg": _sf(self.torsion_std_deg),
+            "confidence_interval_deg": (
+                _sf(self.confidence_interval_deg[0]),
+                _sf(self.confidence_interval_deg[1]),
+            ),
+            "total_processing_time_ms": _sf(self.total_processing_time_ms),
+            "stream_results": {
+                k: v.to_dict() for k, v in self.stream_results.items()
+            },
+        }

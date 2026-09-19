@@ -131,6 +131,7 @@ class DetectionConfig:
     morph_iterations: int = 2
     enable_classical_fallback: bool = True
     classical_confidence_penalty: float = 0.85
+    pre_docked_limbus_shrink_factor: float = 0.93
 
 
 @dataclass
@@ -223,7 +224,7 @@ from enum import Enum
 
 class CalibrationMode(str, Enum):
     """Supported calibration modes."""
-    ANATOMICAL_ANCHOR = "ANATOMICAL_ANCHOR"  # Default: 11.5mm horizontal corneal standard
+    ANATOMICAL_ANCHOR = "ANATOMICAL_ANCHOR"  # Default: 12.0mm horizontal corneal standard
     FIXED_PIXEL_SCALE = "FIXED_PIXEL_SCALE"  # External/fixed px_per_mm scale
     RING_REFLECTION = "RING_REFLECTION"      # Known LED/suction ring dimension
 
@@ -253,10 +254,10 @@ class CalibrationConfig:
         Whether to attempt auto-calibration from detected landmarks.
     """
 
-    mode: str = "ANATOMICAL_ANCHOR"
+    mode: str = "FIXED_PIXEL_SCALE"
     suction_ring_diameter_mm: float = 9.4
-    corneal_diameter_mm: float = 11.5
-    manual_px_per_mm: Optional[float] = 44.5
+    corneal_diameter_mm: float = 12.0
+    manual_px_per_mm: Optional[float] = 58.2
     manual_mm_per_px: Optional[float] = None
     enable_auto_calibration: bool = True
 
@@ -704,6 +705,104 @@ class RingConfig:
     disagreement_penalty: float = 0.80
 
 
+@dataclass
+class RegistrationConfig:
+    """Cyclotorsion detection and iris registration parameters.
+
+    Controls polar unwrapping, enhancement, multi-stream detection,
+    and fusion for the registration pipeline.
+
+    Attributes
+    ----------
+    enabled : bool
+        Whether registration/cyclotorsion detection is available.
+    polar_num_angles : int
+        Number of angular samples in polar unwrapping (360 = 1°/bin).
+    polar_num_radial : int
+        Number of radial samples between pupil and limbus.
+    polar_inner_margin : float
+        Fractional inset from pupil boundary (0–1).
+    polar_outer_margin : float
+        Fractional inset from limbus boundary (0–1).
+    enhance_clahe_clip : float
+        CLAHE clip limit for iris enhancement.
+    enhance_clahe_grid : int
+        CLAHE tile grid size.
+    enhance_gabor_wavelengths : tuple
+        Gabor filter wavelengths for texture enhancement.
+    enable_phase_correlation : bool
+        Enable Stream A: phase-only correlation.
+    enable_deep_matcher : bool
+        Enable Stream B: deep feature matching.
+    enable_ink_tracker : bool
+        Enable Stream C: surgical ink marker tracking.
+    enable_vessel_tracker : bool
+        Enable Stream D: limbal vessel tracking.
+    enable_custom_feature : bool
+        Enable Stream E: custom-trained iris feature model.
+    custom_feature_model_path : str
+        Path to ONNX model for Stream E.
+    fusion_method : str
+        Fusion method: 'weighted_median', 'bayesian', 'robust_mean'.
+    fusion_agreement_threshold_deg : float
+        Maximum angular disagreement (degrees) for streams to be
+        considered in agreement.
+    fusion_min_streams : int
+        Minimum number of valid streams for a fused result.
+    poc_upsample_factor : int
+        Sub-pixel upsample factor for phase correlation.
+    deep_matcher_max_keypoints : int
+        Maximum keypoints for the deep matcher stream.
+    ink_min_markers : int
+        Minimum ink markers required for torsion estimation.
+    ink_hsv_lower : tuple
+        Lower HSV bound for purple/blue ink detection.
+    ink_hsv_upper : tuple
+        Upper HSV bound for purple/blue ink detection.
+    vessel_min_bifurcations : int
+        Minimum vessel bifurcation points for tracking.
+    """
+
+    enabled: bool = True
+
+    # Polar unwrapping
+    polar_num_angles: int = 360
+    polar_num_radial: int = 64
+    polar_inner_margin: float = 0.10
+    polar_outer_margin: float = 0.10
+
+    # Enhancement
+    enhance_clahe_clip: float = 3.0
+    enhance_clahe_grid: int = 8
+    enhance_gabor_wavelengths: tuple = (4, 8, 16)
+
+    # Stream enables
+    enable_phase_correlation: bool = True
+    enable_deep_matcher: bool = True
+    enable_ink_tracker: bool = True
+    enable_vessel_tracker: bool = True
+    enable_custom_feature: bool = True
+
+    # Custom feature model
+    custom_feature_model_path: str = "models/iris_features/iris_feature_model.onnx"
+
+    # Fusion
+    fusion_method: str = "weighted_median"
+    fusion_agreement_threshold_deg: float = 1.0
+    fusion_min_streams: int = 2
+
+    # Stream-specific parameters
+    poc_upsample_factor: int = 100
+
+    deep_matcher_max_keypoints: int = 500
+
+    ink_min_markers: int = 2
+    ink_hsv_lower: tuple = (120, 50, 50)
+    ink_hsv_upper: tuple = (160, 255, 255)
+
+    vessel_min_bifurcations: int = 3
+
+
 # ════════════════════════════════════════════════════════════════
 # Top-level configuration container
 # ════════════════════════════════════════════════════════════════
@@ -740,6 +839,8 @@ class PupilTrackingConfig:
         Calibration EMA smoothing and outlier rejection.
     subpixel : SubPixelConfig
         Sub-pixel refinement precision controls.
+    registration : RegistrationConfig
+        Cyclotorsion detection and iris registration parameters.
     video_mode : bool
         Whether video-mode relaxations have been applied.
         Set automatically by ``apply_video_mode()``.
@@ -760,6 +861,7 @@ class PupilTrackingConfig:
         default_factory=MeasurementStabilizationConfig,
     )
     subpixel: SubPixelConfig = field(default_factory=SubPixelConfig)
+    registration: RegistrationConfig = field(default_factory=RegistrationConfig)
 
     video_mode: bool = False
     debug: bool = False
