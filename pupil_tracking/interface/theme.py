@@ -16,22 +16,21 @@ from __future__ import annotations
 
 import tkinter as tk
 from tkinter import ttk
-from types import SimpleNamespace
 
 
 class Colors:
     """Central colour palette — every UI colour lives here."""
 
     # ── Backgrounds ──────────────────────────────────────────────
-    BG_PRIMARY = "#0e0e12"
-    BG_SECONDARY = "#16161e"
-    BG_TERTIARY = "#1e1e2a"
-    BG_INPUT = "#12121a"
-    CANVAS_BG = "#0a0a0e"
+    BG_PRIMARY = "#121212"
+    BG_SECONDARY = "#1D1D1F"
+    BG_TERTIARY = "#1D1D1F"
+    BG_INPUT = "#121212"
+    CANVAS_BG = "#121212"
 
     # ── Borders ──────────────────────────────────────────────────
-    BORDER = "#2a2a3a"
-    BORDER_FOCUS = "#4a9eff"
+    BORDER = "#323232"
+    BORDER_FOCUS = "#0071E3"
 
     # ── Foregrounds ──────────────────────────────────────────────
     FG_PRIMARY = "#e4e4e8"
@@ -39,9 +38,9 @@ class Colors:
     FG_TERTIARY = "#606070"
 
     # ── Accent ───────────────────────────────────────────────────
-    ACCENT = "#4a9eff"
-    ACCENT_HOVER = "#6ab4ff"
-    ACCENT_DIM = "#1a3a5c"
+    ACCENT = "#0071E3"
+    ACCENT_HOVER = "#3395FF"
+    ACCENT_DIM = "#003A75"
 
     # ── Quality grades ───────────────────────────────────────────
     SURGICAL = "#00e676"
@@ -58,13 +57,16 @@ class Colors:
     PROCESSING = "#9e9e9e"
 
     # ── Buttons ──────────────────────────────────────────────────
-    BTN_BG = "#1a2a40"
-    BTN_HOVER = "#243c5a"
-    BTN_ACTIVE = "#2e4e74"
+    BTN_PRIMARY = "#FFFFFF"
+    BTN_SECONDARY = "#323232"
+    BTN_ACTION = "#0071E3"
+    BTN_BG = "#323232"
+    BTN_HOVER = "#3D3D3D"
+    BTN_ACTIVE = "#1D1D1F"
 
     # ── Scrollbar ────────────────────────────────────────────────
-    SCROLLBAR = "#2a2a3a"
-    SCROLLBAR_THUMB = "#444458"
+    SCROLLBAR = "#1D1D1F"
+    SCROLLBAR_THUMB = "#323232"
 
     # ── Quality colour map (for badge / labels) ──────────────────
     QUALITY_MAP = {
@@ -215,7 +217,7 @@ class DarkTheme:
         # ── TButton ─────────────────────────────────────────────
         style.configure(
             "TButton",
-            background=colors.BTN_BG,
+            background=colors.BTN_SECONDARY,
             foreground=colors.FG_PRIMARY,
             bordercolor=colors.BORDER,
             focuscolor=colors.ACCENT,
@@ -226,25 +228,86 @@ class DarkTheme:
             "TButton",
             background=[
                 ("active", colors.BTN_ACTIVE),
-                ("!disabled", colors.BTN_BG),
+                ("!disabled", colors.BTN_SECONDARY),
             ],
             foreground=[
                 ("disabled", colors.FG_TERTIARY),
             ],
         )
-        # Accent button
+        # Primary button (white, high contrast)
+        style.configure(
+            "Primary.TButton",
+            background=colors.BTN_PRIMARY,
+            foreground=colors.BG_PRIMARY,
+            bordercolor=colors.BTN_PRIMARY,
+            font=("Segoe UI", 10, "bold"),
+        )
+        style.map(
+            "Primary.TButton",
+            background=[("active", "#E0E0E0")],
+            foreground=[("active", colors.BG_PRIMARY)],
+        )
+        # Action/Accent button (blue)
         style.configure(
             "Accent.TButton",
-            background=colors.ACCENT_DIM,
-            foreground=colors.ACCENT,
-            bordercolor=colors.ACCENT,
+            background=colors.BTN_ACTION,
+            foreground=colors.BTN_PRIMARY,
+            bordercolor=colors.BTN_ACTION,
         )
         style.map(
             "Accent.TButton",
-            background=[("active", colors.ACCENT)],
-            foreground=[("active", colors.BG_PRIMARY)],
+            background=[("active", colors.ACCENT_HOVER)],
+            foreground=[("active", colors.BTN_PRIMARY)],
         )
 
+
+        # Toolbar active (selected) button — blue highlight
+        style.configure(
+            "ToolbarActive.TButton",
+            background=colors.BTN_ACTION,
+            foreground=colors.BTN_PRIMARY,
+            bordercolor=colors.BTN_ACTION,
+            font=("Segoe UI", 10, "bold"),
+            padding=(10, 4),
+        )
+        style.map(
+            "ToolbarActive.TButton",
+            background=[
+                ("active",    colors.ACCENT_HOVER),
+                ("!disabled", colors.BTN_ACTION),
+            ],
+            foreground=[
+                ("active",    colors.BTN_PRIMARY),
+                ("!disabled", colors.BTN_PRIMARY),
+            ],
+        )
+        # ROI/Ring interaction buttons — green while active/editing
+        style.configure(
+            "ROIActive.TButton",
+            background=colors.SURGICAL,
+            foreground=colors.BG_PRIMARY,
+            bordercolor=colors.SURGICAL,
+            font=("Segoe UI", 10, "bold"),
+            padding=(10, 4),
+        )
+        style.map(
+            "ROIActive.TButton",
+            background=[("active", colors.SURGICAL), ("!disabled", colors.SURGICAL)],
+            foreground=[("active", colors.BG_PRIMARY), ("!disabled", colors.BG_PRIMARY)],
+        )
+        style.configure(
+            "RingActive.TButton",
+            background=colors.SURGICAL,
+            foreground=colors.BG_PRIMARY,
+            bordercolor=colors.SURGICAL,
+            font=("Segoe UI", 10, "bold"),
+            padding=(10, 4),
+        )
+        style.map(
+            "RingActive.TButton",
+            background=[("active", colors.SURGICAL), ("!disabled", colors.SURGICAL)],
+            foreground=[("active", colors.BG_PRIMARY), ("!disabled", colors.BG_PRIMARY)],
+        )
         # ── TNotebook ───────────────────────────────────────────
         style.configure(
             "TNotebook",

@@ -1,0 +1,4 @@
+pair_id,image_a,image_b,features_a,features_b,coverage_a,coverage_b,valid,rotation_deg,scale,confidence,failure,failure_reason,n_matches,feature_count,angular_coverage,occupied_bins,processing_ms
+1,eye_01.jpeg,eye_02.jpeg,16,68,0.0033,0.0145,False,,,,LOW_NCC,3/4 refined NCC scores below 0.42,4,16,0.8056,9,13.0
+2,eye_01.jpeg,eye_03.jpeg,16,60,0.0033,0.0122,False,,,,LOW_NCC,3/4 refined NCC scores below 0.42,4,16,0.8056,9,13.3
+3,eye_02.jpeg,eye_03.jpeg,68,60,0.0145,0.0122,True,359.69,1.0175,,OK,,24,68,0.9722,12,56.6

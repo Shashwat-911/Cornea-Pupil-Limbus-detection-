@@ -70,7 +70,7 @@ _RUNTIME_PROFILE = apply_runtime_optimizations(detect_runtime_profile())
 
 
 # -- Constants ---------------------------------------------------
-_CORNEAL_DIAMETER_MM = 11.5
+_CORNEAL_DIAMETER_MM = 12.0
 
 _BANNER = "Medevplus IXcentai - Surgical Grade"
 
@@ -1719,23 +1719,23 @@ def _build_parser() -> argparse.ArgumentParser:
     cal_group.add_argument(
         "--calibration-mode",
         type=str,
-        default="ANATOMICAL_ANCHOR",
+        default="FIXED_PIXEL_SCALE",
         choices=["ANATOMICAL_ANCHOR", "FIXED_PIXEL_SCALE", "RING_REFLECTION"],
-        help="Calibration mode: ANATOMICAL_ANCHOR, FIXED_PIXEL_SCALE, RING_REFLECTION (default: ANATOMICAL_ANCHOR)",
+        help="Calibration mode: ANATOMICAL_ANCHOR, FIXED_PIXEL_SCALE, RING_REFLECTION (default: FIXED_PIXEL_SCALE)",
     )
     cal_group.add_argument(
         "--px-per-mm",
         type=float,
-        default=44.5,
+        default=58.2,
         metavar="F",
-        help="Fixed manual scale in px/mm for FIXED_PIXEL_SCALE mode (default: 44.5)",
+        help="Fixed manual scale in px/mm for FIXED_PIXEL_SCALE mode (default: 58.2)",
     )
     cal_group.add_argument(
         "--corneal-diameter-mm",
         type=float,
-        default=11.5,
+        default=12.0,
         metavar="F",
-        help="Assumed horizontal corneal diameter in mm (default: 11.5)",
+        help="Assumed horizontal corneal diameter in mm (default: 12.0)",
     )
     cal_group.add_argument(
         "--ring-diameter-mm",

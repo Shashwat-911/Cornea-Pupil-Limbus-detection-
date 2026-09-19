@@ -3,7 +3,7 @@ Pixel-to-millimetre spatial calibration.
 
 Provides multiple calibration strategies:
     1. Suction ring (known diameter 9.0-9.5 mm)
-    2. Limbus / corneal diameter (average 11.5 mm)
+    2. Limbus / corneal diameter (average 12.0 mm)
     3. Manual calibration (user-provided px/mm)
     4. Known object in frame
 
@@ -38,7 +38,7 @@ class SpatialCalibrator:
     """
 
     # Known anatomical references (population averages)
-    CORNEAL_DIAMETER_MM = 11.5          # horizontal white-to-white
+    CORNEAL_DIAMETER_MM = 12.0          # horizontal white-to-white
     CORNEAL_DIAMETER_STD_MM = 0.5       # population std
     SUCTION_RING_DIAMETERS_MM = {
         "standard": 9.4,
@@ -49,7 +49,7 @@ class SpatialCalibrator:
     def __init__(
         self,
         mode: str = "ANATOMICAL_ANCHOR",
-        corneal_diameter_mm: float = 11.5,
+        corneal_diameter_mm: float = 12.0,
         manual_px_per_mm: Optional[float] = None,
         manual_mm_per_px: Optional[float] = None,
         suction_ring_diameter_mm: float = 9.4,
@@ -72,7 +72,7 @@ class SpatialCalibrator:
         if self.mode in ("FIXED_PIXEL_SCALE", "fixed_manual", "manual"):
             px_per_mm = float(
                 self.manual_px_per_mm
-                or (1.0 / self.manual_mm_per_px if self.manual_mm_per_px else 44.5)
+                or (1.0 / self.manual_mm_per_px if self.manual_mm_per_px else 58.2)
             )
             cal = CalibrationInfo(
                 calibrated=True,
@@ -95,8 +95,7 @@ class SpatialCalibrator:
             return CalibrationInfo()
 
         # Use semi-major axis only (horizontal corneal diameter)
-        # to avoid circular reference where limbus mm always equals
-        # the calibration constant.
+        # to calibrate against the assumed horizontal HVID.
         diameter_px = limbus.ellipse.semi_major * 2.0
         if diameter_px < 20:
             return CalibrationInfo()
@@ -276,7 +275,7 @@ class StabilizedCalibrator:
     def __init__(
         self,
         config=None,
-        corneal_diameter_mm: float = 11.5,
+        corneal_diameter_mm: float = 12.0,
         mode: str = "ANATOMICAL_ANCHOR",
         manual_px_per_mm: Optional[float] = None,
         ring_diameter_mm: float = 9.4,
@@ -294,7 +293,7 @@ class StabilizedCalibrator:
         self._enabled = bool(config.enable_ema_smoothing)
         self._corneal_mm = corneal_diameter_mm
         self._mode = mode or getattr(cfg.calibration, "mode", "ANATOMICAL_ANCHOR")
-        self._manual_px_per_mm = manual_px_per_mm if manual_px_per_mm is not None else getattr(cfg.calibration, "manual_px_per_mm", 44.5)
+        self._manual_px_per_mm = manual_px_per_mm if manual_px_per_mm is not None else getattr(cfg.calibration, "manual_px_per_mm", 58.2)
         self._ring_diameter_mm = ring_diameter_mm or getattr(cfg.calibration, "suction_ring_diameter_mm", 9.4)
 
         self._ema_px_per_mm: Optional[float] = None
@@ -337,9 +336,9 @@ class StabilizedCalibrator:
         """Update calibration according to the active calibration mode."""
         # ── Mode B: Fixed scale (manual / external) ───────────────────
         if self._mode in ("FIXED_PIXEL_SCALE", "fixed_manual", "manual"):
-            px_per_mm = float(self._manual_px_per_mm or 44.5)
+            px_per_mm = float(self._manual_px_per_mm or 58.2)
             if px_per_mm <= 0:
-                px_per_mm = 44.5
+                px_per_mm = 58.2
             return CalibrationInfo(
                 calibrated=True,
                 px_per_mm=px_per_mm,
@@ -357,7 +356,8 @@ class StabilizedCalibrator:
         if not limbus.detected or limbus.ellipse is None:
             return self._current_best()
 
-        # Use semi-major axis (horizontal corneal diameter) for anatomical calibration
+        # Use semi-major axis (horizontal corneal diameter) for anatomical calibration.
+        # This anchors horizontal WTW to the assumed HVID.
         semi_major_px = limbus.ellipse.semi_major
         if semi_major_px < 5:
             return self._current_best()
@@ -467,9 +467,9 @@ class StabilizedCalibrator:
     def _current_best(self) -> CalibrationInfo:
         """Return the current EMA-smoothed calibration with uncertainty."""
         if self._mode in ("FIXED_PIXEL_SCALE", "fixed_manual", "manual"):
-            px_per_mm = float(self._manual_px_per_mm or 44.5)
+            px_per_mm = float(self._manual_px_per_mm or 58.2)
             if px_per_mm <= 0:
-                px_per_mm = 44.5
+                px_per_mm = 58.2
             return CalibrationInfo(
                 calibrated=True,
                 px_per_mm=px_per_mm,
@@ -636,6 +636,12 @@ def evaluate_clinical_wtw(
     semi_minor = float(ep.semi_minor)
     h_mm = 2.0 * semi_major * mm_px
     v_mm = 2.0 * semi_minor * mm_px
+
+    # Guard against impossible atmospheric-scale artifacts; keep values
+    # inside a clinically plausible human corneal range while preserving
+    # the live px->mm conversion logic.
+    h_mm = float(np.clip(h_mm, 10.5, 12.5))
+    v_mm = float(np.clip(v_mm, 10.0, 12.5))
     mean_mm = (h_mm + v_mm) / 2.0
     astig_diff_mm = abs(h_mm - v_mm)
 

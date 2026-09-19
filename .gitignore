@@ -34,23 +34,43 @@ env/
 *~
 .DS_Store
 
-# Large model files
+# Large model files (production ONNX loaded at runtime; models/onnx/ metadata tracked)
 *.pth
 *.pt
 *.onnx
-*.data
 *.onnx.data
 *.h5
 
-# Logs
+# Logs and audit output
 logs/
 *.log
 audit_*.jsonl
 
-# Data directories (keep structure, ignore data)
-clinical_data/training_data/
+# Generated / temporary files
+runtime_trace.py
+project_tree.txt
+PROJECT_COMPLETE_ANALYSIS.md
+manual_ring_priors.json
 diagnostic_output/
+output/
+
+# Training data (large, not needed for repo)
+clinical_data/training_data/
 
 # Assistant / Claude / Cursor config
 .claude/
 *.csv.xlsx
+
+# Environment / secrets
+.env
+.env.*
+
+# Phase artifacts (temporary work, golden outputs, port scratch) — never commit
+_phase_artifacts/
+
+# .NET / C# build output (scoped to the C# port under csharp/)
+csharp/**/bin/
+csharp/**/obj/
+csharp/**/*.user
+csharp/**/publish/
+.vs/

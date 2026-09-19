@@ -178,11 +178,14 @@ class UnifiedDetector:
         corneal_mm = getattr(
             self.cfg.calibration,
             "corneal_diameter_mm",
-            11.5,
+            12.0,
         )
         self._stabilized_cal = StabilizedCalibrator(
             config=self.cfg.measurement_stabilization,
             corneal_diameter_mm=corneal_mm,
+            mode=getattr(self.cfg.calibration, "mode", "ANATOMICAL_ANCHOR"),
+            manual_px_per_mm=getattr(self.cfg.calibration, "manual_px_per_mm", None),
+            ring_diameter_mm=getattr(self.cfg.calibration, "suction_ring_diameter_mm", 9.4),
         )
 
         # --- Video mode state ---
@@ -593,7 +596,7 @@ class UnifiedDetector:
             and result.limbus.detected
             and result.limbus.ellipse is not None
         ):
-            shrink_factor = 0.93
+            shrink_factor = self.cfg.detection.pre_docked_limbus_shrink_factor
             result.limbus.ellipse.set_radius(
                 result.limbus.ellipse.radius * shrink_factor
             )
@@ -652,7 +655,7 @@ class UnifiedDetector:
         # ============================================================
         try:
             if (
-                getattr(result, "ring_status", "pre_docked") == "PRESENT"
+                getattr(result, "ring_status", "pre_docked") == "ring_present"
                 and getattr(result, "ring_inner_radius", None) is not None
                 and result.limbus.detected
                 and result.limbus.radius_mm is not None
@@ -1626,13 +1629,12 @@ class UnifiedDetector:
     def calibrate_from_limbus(
         self,
         limbus: LimbusDetection,
-        corneal_diameter_mm: float = 11.5,
+        corneal_diameter_mm: float = 12.0,
     ) -> CalibrationInfo:
-        """Calibrate using the known average corneal diameter.
+        """Calibrate using the known average horizontal corneal diameter (HVID).
 
-        Uses the **semi-major axis** only (horizontal corneal diameter)
-        so that the semi-minor axis and mean diameter can show natural
-        variation when the limbus is elliptical.
+        Uses the semi-major axis (horizontal limbus diameter) so that
+        horizontal WTW is anchored to the assumed HVID reference.
         """
         if not limbus.detected or limbus.ellipse is None:
             return CalibrationInfo()

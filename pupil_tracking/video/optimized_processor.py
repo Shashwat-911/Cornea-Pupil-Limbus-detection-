@@ -330,18 +330,23 @@ class _FrameReader(threading.Thread):
         q: queue.Queue,
         stride: int = 1,
         max_frames: Optional[int] = None,
+        pause_predicate: Optional[Callable[[], bool]] = None,
     ):
         super().__init__(daemon=True)
         self._cap = cap
         self._q = q
         self._stride = stride
         self._max = max_frames
+        self._pause_predicate = pause_predicate
         self._stop_event = threading.Event()
 
     def run(self):
         idx = 0
         produced = 0
         while not self._stop_event.is_set():
+            if self._pause_predicate is not None and self._pause_predicate():
+                time.sleep(0.05)
+                continue
             ok, frame = self._cap.read()
             if not ok:
                 break
@@ -549,6 +554,7 @@ class OptimizedVideoProcessor:
         self._batch_size = requested_batch_size
         self._enable_auto_roi = bool(enable_auto_roi)
         self._manual_roi: Optional[ManualCircularROI] = None
+        self._detection_enabled = True
         self._manual_ring: Optional[ManualRingAnnotation] = None
         self._manual_ring_priors_path = (
             Path(__file__).resolve().parents[2] / "manual_ring_priors.json"
@@ -764,16 +770,47 @@ class OptimizedVideoProcessor:
             frame_width=frame_width,
             frame_height=frame_height,
         )
+        self._detection_enabled = True
         self.smoother.reset()
         self._stable_tracking_streak = 0
         self._quality_check_skip_count = 0
 
     def clear_manual_roi(self) -> None:
-        """Clear the user-defined ROI and fall back to automatic behaviour."""
+        """Clear the user-defined ROI and stop detection until one is set."""
         self._manual_roi = None
+        self._detection_enabled = False
         self.smoother.reset()
         self._stable_tracking_streak = 0
         self._quality_check_skip_count = 0
+
+    def _roi_required_result(self, frame_idx: int, started_at: float) -> Dict[str, Any]:
+        self.smoother.reset()
+        self._last_valid_result = None
+        result = {
+            "pupil_detected": False,
+            "limbus_detected": False,
+            "frame_quality": "roi_required",
+            "overall_quality": "roi_required",
+            "overall_confidence": 0.0,
+            "ring_status": RingStatus.ABSENT.value,
+            "ring_confidence": 0.0,
+            "ring_center_x": None,
+            "ring_center_y": None,
+            "ring_radius": None,
+            "manual_roi_active": False,
+            "manual_ring_active": False,
+            "image_category": "pre_docked",
+            "corneal_reference_source": "limbus",
+            "frame_idx": frame_idx,
+            "latency_ms": (time.perf_counter() - started_at) * 1000.0,
+            "roi_from_cache": False,
+            "roi_is_closeup": False,
+            "roi_time_ms": 0.0,
+            "quality_check_skipped": False,
+            "reuse_cached_result": False,
+        }
+        self._record_metrics(result, result["latency_ms"], 0.0)
+        return result
 
     def _load_manual_ring_priors(self) -> Dict[str, Any]:
         try:
@@ -899,7 +936,10 @@ class OptimizedVideoProcessor:
         self._quality_check_skip_count = 0
 
     def clear_manual_ring(self) -> None:
+        """Disable the manual ring and drop any stale ring priors so detection really stops."""
         self._manual_ring = None
+        self._manual_ring_priors = {}
+        self._last_ring_status = RingStatus.ABSENT.value
         self.smoother.reset()
         self._stable_tracking_streak = 0
         self._quality_check_skip_count = 0
@@ -1280,6 +1320,8 @@ class OptimizedVideoProcessor:
         For video files, prefer process_video() which uses batching.
         """
         t0 = time.perf_counter()
+        if not getattr(self, "_detection_enabled", True):
+            return self._roi_required_result(frame_idx, t0)
         roi = ROIResult(
             x=0,
             y=0,
@@ -1528,6 +1570,10 @@ class OptimizedVideoProcessor:
 
         for frame_idx, frame in raw_items:
             t0 = time.perf_counter()
+
+            if not getattr(self, "_detection_enabled", True):
+                resolved.append(self._roi_required_result(frame_idx, t0))
+                continue
 
             roi_t0 = time.perf_counter()
             roi = self._resolve_roi(frame)

@@ -30,6 +30,7 @@
 torch>=1.12.0                      # PyTorch - Core deep learning framework
 torchvision>=0.13.0                # PyTorch vision models and utilities
 segmentation-models-pytorch>=0.3.0 # Pre-built segmentation architectures (U-Net, etc.)
+onnxruntime>=1.12.0                # ONNX Runtime - ML inference engine (see options above)
 
 # ============================================================================
 # IMAGE & COMPUTER VISION PROCESSING
@@ -70,5 +71,6 @@ pytest>=6.0.0                      # pytest - Unit testing framework for test su
 # - Standard library modules (json, csv, pathlib, etc.) are included with Python
 # - onnx is needed only for model export (scripts/export_onnx.py,
 #   scripts/convert_to_onnx.py): pip install onnx
+# - onnxruntime variants (directml, openvino, gpu) replace onnxruntime above
 # ============================================================================
 

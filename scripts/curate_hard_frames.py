@@ -31,7 +31,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from pupil_tracking.preprocessing.red_light_filter import RedLightFilter
-from pupil_tracking.core.ring_detector import RingDetector, RingStatus
+from pupil_tracking.core.deterministic_ring_detector import RingDetector, RingStatus
 
 # Try lazy importing packages
 try:

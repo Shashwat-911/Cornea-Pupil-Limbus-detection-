@@ -28,7 +28,7 @@ Usage
 ...     PreprocessingResult,
 ...     AdaptiveContourFilter,
 ... )
->>> from pupil_tracking.core.ring_detector import RingDetector
+>>> from pupil_tracking.core.deterministic_ring_detector import RingDetector
 >>>
 >>> ring_detector = RingDetector()
 >>> ring_result = ring_detector.detect(image)
@@ -160,7 +160,7 @@ class RingAwarePreprocessor:
         PreprocessingResult
         """
         # Lazy import to avoid circular dependency at module load time
-        from pupil_tracking.core.ring_detector import RingStatus
+        from pupil_tracking.core.deterministic_ring_detector import RingStatus
 
         has_ring = (
             ring_result is not None
@@ -427,7 +427,7 @@ class AdaptiveContourFilter:
             Contours that passed all filters.
         """
         # Lazy import
-        from pupil_tracking.core.ring_detector import RingStatus
+        from pupil_tracking.core.deterministic_ring_detector import RingStatus
 
         filtered: List[np.ndarray] = []
         h, w = image_shape[:2]

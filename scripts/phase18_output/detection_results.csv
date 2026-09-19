@@ -1,0 +1,13 @@
+image,pupil_detected,limbus_detected,iris_features,iris_coverage,iris_status,pupil_detection_ms,iris_detection_ms,total_ms
+eye_01.jpeg,True,True,16,0.0033,OK,909.8,130.8,1040.5
+eye_02.jpeg,True,True,68,0.0145,OK,938.3,324.7,1263.1
+eye_03.jpeg,True,True,60,0.0122,OK,945.1,256.9,1202.0
+eye_06.jpeg,True,True,0,0.0,NO_ROI,1120.1,0.0,1120.1
+eye_07.jpeg,True,True,0,0.0,NO_ROI,1128.1,0.0,1128.2
+eye_08.jpeg,True,True,0,0.0,NO_ROI,996.6,0.0,996.6
+eye_09.jpeg,True,True,0,0.0,NO_ROI,986.8,0.0,986.8
+eye_10.jpeg,True,True,0,0.0,NO_ROI,1034.1,0.0,1034.1
+eye_11.jpeg,True,True,0,0.0,NO_FEATURES,984.7,270.2,1254.9
+eye_12.jpeg,True,True,0,0.0,NO_ROI,1666.8,0.0,1666.8
+eye_13.jpeg,True,True,2,0.0003,OK,879.3,247.7,1127.0
+eye_14.jpeg,True,True,0,0.0,NO_ROI,1368.4,0.0,1368.4

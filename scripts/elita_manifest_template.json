@@ -1,0 +1,22 @@
+{
+  "version": "1.0",
+  "description": "ELITA pre-dock / post-dock pair manifest. Replace placeholder paths with real image paths.",
+  "pairs": [
+    {
+      "pair_id": "example_001_L",
+      "eye_side": "left",
+      "pre_dock_image": "path/to/pre_dock/image.jpeg",
+      "post_dock_image": "path/to/post_dock/image.jpeg",
+      "reference_rotation_deg": null,
+      "notes": "Replace with real ELITA image paths"
+    },
+    {
+      "pair_id": "example_002_R",
+      "eye_side": "right",
+      "pre_dock_image": "path/to/pre_dock/image.jpeg",
+      "post_dock_image": "path/to/post_dock/image.jpeg",
+      "reference_rotation_deg": null,
+      "notes": "reference_rotation_deg should be null if no ground truth is available"
+    }
+  ]
+}

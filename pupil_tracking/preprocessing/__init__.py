@@ -35,7 +35,7 @@ Usage
 >>> image = normalizer.normalize(image)
 >>>
 >>> # Ring-aware preprocessing (auto-adapts to docked vs pre-docked)
->>> from pupil_tracking.core.ring_detector import RingDetector
+>>> from pupil_tracking.core.deterministic_ring_detector import RingDetector
 >>> ring_detector = RingDetector()
 >>> ring_result = ring_detector.detect(image)
 >>> preprocessor = RingAwarePreprocessor()

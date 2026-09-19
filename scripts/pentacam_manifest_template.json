@@ -1,0 +1,27 @@
+{
+  "version": "1.0",
+  "description": "Pentacam sitting image manifest. Replace placeholder paths with real Pentacam image paths.",
+  "coordinate_system_note": "Pentacam coordinate system is device-specific. This manifest does not assume a specific coordinate convention.",
+  "images": [
+    {
+      "image_id": "pentacam_001_L",
+      "eye_side": "left",
+      "image_path": "path/to/pentacam_image.jpeg",
+      "image_type": "SCHEIMPFLUG_CROSS_SECTION",
+      "corresponding_elita_case": "elita_case_001",
+      "sitting_position": true,
+      "reference_rotation_deg": null,
+      "notes": "Replace with real Pentacam image path"
+    },
+    {
+      "image_id": "pentacam_002_R",
+      "eye_side": "right",
+      "image_path": "path/to/pentacam_image.jpeg",
+      "image_type": "SCHEIMPFLUG_CROSS_SECTION",
+      "corresponding_elita_case": "elita_case_002",
+      "sitting_position": true,
+      "reference_rotation_deg": null,
+      "notes": "reference_rotation_deg is null if no ground truth is available"
+    }
+  ]
+}
