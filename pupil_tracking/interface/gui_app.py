@@ -10,7 +10,7 @@ Features:
     - Diameter display in pixels AND millimetres
     - Semi-major/semi-minor display in pixels AND millimetres
     - Offset display in pixels AND millimetres
-    - Auto-calibration from limbus (corneal diameter = 11.5 mm)
+    - Auto-calibration from limbus (corneal diameter = 12.0 mm)
     - Detection overlay with pupil, limbus, corneal centre, offset
     - Export results to CSV / JSON / snapshot
     - Quality grade badge
@@ -26,8 +26,9 @@ Features:
 from __future__ import annotations
 
 import csv
-import json
 import math
+import re
+import shutil
 import threading
 import time
 import tkinter as tk
@@ -44,27 +45,16 @@ from pupil_tracking.core.detector import UnifiedDetector
 from pupil_tracking.video.kalman_tracker import EyeKalmanTracker
 from pupil_tracking.core.corneal_center import CornealCenterCalculator
 from pupil_tracking.utils.types import (
-    EyeDetectionResult,
     DetectionQuality,
     CalibrationInfo,
-    assign_quality_grade,
 )
-from pupil_tracking.utils.config import get_config, set_config
+from pupil_tracking.utils.config import get_config
 from pupil_tracking.utils.logger import get_logger
 from pupil_tracking.utils.runtime_profile import (
     apply_runtime_optimizations,
     detect_runtime_profile,
 )
-from pupil_tracking.interface.theme import DarkTheme, Colors
-
-# ══════════════════════════════════════════════════════════════════
-# GRAYSCALE GUI 1 of 12 — Import grayscale types
-# ══════════════════════════════════════════════════════════════════
-from pupil_tracking.preprocessing.grayscale_handler import (
-    GrayscaleMode,
-    GrayscaleInfo,
-)
-# ══════════════════════════════════════════════════════════════════
+from pupil_tracking.interface.theme import DarkTheme
 
 try:
     from pupil_tracking.ml.fast_inference import FastInference
@@ -90,7 +80,7 @@ except ImportError:
 from pupil_tracking.interface.frame_recorder import FrameRecorder
 
 
-_CORNEAL_DIAMETER_MM = 11.5
+_CORNEAL_DIAMETER_MM = 12.0
 _CIRCLE_DRAW_THRESHOLD = 0.95
 
 _QUALITY_COLORS = {
@@ -174,6 +164,11 @@ class PupilTrackingGUI:
         self._using_optimized_camera: bool = False
         self._last_opt_stats: Dict[str, Any] = {}
         self._manual_roi: Optional[Dict[str, float]] = None
+        # Detection is gated on the ROI: after a video/camera is loaded we show
+        # the first frame and hold until the user confirms an ROI, at which point
+        # the stored start callable spins up the detection thread.
+        self._awaiting_roi: bool = False
+        self._pending_detection_start: Optional[Any] = None
         self._roi_edit_active = False
         self._roi_drag_mode: Optional[str] = None
         self._roi_drag_offset: Tuple[float, float] = (0.0, 0.0)
@@ -189,15 +184,31 @@ class PupilTrackingGUI:
         self._results_history: List[Dict[str, Any]] = []
 
         # ══════════════════════════════════════════════════════════
-        # RECORDING — FrameRecorder instance
+        # RECORDING — FrameRecorder instances (Overlay + Clean Raw Dual-Stream)
         # ══════════════════════════════════════════════════════════
-        self._recorder = FrameRecorder()
+        self._recorder = FrameRecorder(name="overlay")
+        self._raw_recorder = FrameRecorder(name="raw")
         self._recorder.set_status_callback(self._on_recorder_status)
         self._recording_path: Optional[str] = None
+        self._raw_recording_path: Optional[str] = None
+        self._dual_recording_var = tk.BooleanVar(value=True)
         self._recording_default_path_var = tk.StringVar(value="")
         self._recording_timer_id: Optional[str] = None
         self._recording_fps_var = tk.DoubleVar(value=0.0)
         self._recording_dropped_var = tk.IntVar(value=0)
+        # Patient/session storage. The root can be changed from Settings and
+        # persists between launches; a patient must be selected before a
+        # clinical recording is allowed.
+        self._storage_settings_path = Path.home() / "AppData" / "Local" / "MedevplusIXcentai" / "settings.txt"
+        self._storage_root_var = tk.StringVar(value=str(Path.home() / "Desktop" / "Centration"))
+        self._patient_id_var = tk.StringVar(value="")
+        self._patient_name_var = tk.StringVar(value="")
+        self._selected_eye_var = tk.StringVar(value="")
+        self._active_patient_dir: Optional[Path] = None
+        self._add_px_dialog_open = False
+        self._patient_summary_var = tk.StringVar(value="No patient selected")
+        self._recording_location_var = tk.StringVar(value="Recording location: select a patient and eye")
+        self._load_storage_settings()
         # ══════════════════════════════════════════════════════════
 
         self._init_settings_vars()
@@ -252,11 +263,11 @@ class PupilTrackingGUI:
         self._limbus_fill_alpha_var = tk.IntVar(value=0)
 
         # ── Modular Calibration Settings ──
-        init_mode = getattr(self.cfg.calibration, "mode", "ANATOMICAL_ANCHOR") if hasattr(self.cfg, "calibration") else "ANATOMICAL_ANCHOR"
+        init_mode = getattr(self.cfg.calibration, "mode", "FIXED_PIXEL_SCALE") if hasattr(self.cfg, "calibration") else "FIXED_PIXEL_SCALE"
         self._calibration_mode_var = tk.StringVar(value=init_mode)
-        init_manual_px = float(getattr(self.cfg.calibration, "manual_px_per_mm", 44.5) or 44.5) if hasattr(self.cfg, "calibration") else 44.5
+        init_manual_px = float(getattr(self.cfg.calibration, "manual_px_per_mm", 58.2) or 58.2) if hasattr(self.cfg, "calibration") else 58.2
         self._fixed_scale_var = tk.DoubleVar(value=init_manual_px)
-        init_corneal = float(getattr(self.cfg.calibration, "corneal_diameter_mm", 11.5) or 11.5) if hasattr(self.cfg, "calibration") else 11.5
+        init_corneal = float(getattr(self.cfg.calibration, "corneal_diameter_mm", 12.0) or 12.0) if hasattr(self.cfg, "calibration") else 12.0
         self._corneal_ref_mm_var = tk.DoubleVar(value=init_corneal)
         init_ring = float(getattr(self.cfg.calibration, "suction_ring_diameter_mm", 9.4) or 9.4) if hasattr(self.cfg, "calibration") else 9.4
         self._ring_ref_mm_var = tk.DoubleVar(value=init_ring)
@@ -415,6 +426,331 @@ class PupilTrackingGUI:
     # RECORDING — Professional recording with FrameRecorder
     # ══════════════════════════════════════════════════════════════════
 
+    @staticmethod
+    def _safe_folder_name(value: str) -> str:
+        """Return a Windows-safe, readable folder name."""
+        cleaned = re.sub(r'[<>:"/\\|?*]+', "_", value.strip())
+        return cleaned.strip(". ") or "Unknown"
+
+    def _load_storage_settings(self) -> None:
+        try:
+            if self._storage_settings_path.exists():
+                for line in self._storage_settings_path.read_text(encoding="utf-8").splitlines():
+                    if line.startswith("data_storage_root="):
+                        root = line.split("=", 1)[1].strip()
+                        if root:
+                            self._storage_root_var.set(root)
+                        break
+        except (OSError, UnicodeError) as exc:
+            self.logger.warning("Could not load storage settings: %s", exc)
+
+    def _save_storage_settings(self) -> bool:
+        location = self._storage_root_var.get().strip()
+        if not location:
+            messagebox.showwarning("Storage location required", "Choose a folder for patient data first.")
+            return False
+        try:
+            root = Path(location).expanduser()
+            root.mkdir(parents=True, exist_ok=True)
+            self._storage_root_var.set(str(root))
+            self._storage_settings_path.parent.mkdir(parents=True, exist_ok=True)
+            self._storage_settings_path.write_text(
+                f"# Medevplus IXcentai - Settings\ndata_storage_root={root}\n",
+                encoding="utf-8",
+            )
+            self._status_var.set(f"Patient data location saved → {root}")
+            return True
+        except OSError as exc:
+            messagebox.showerror("Storage location error", f"Cannot use that folder:\n{exc}")
+            return False
+
+    def _choose_storage_root(self) -> None:
+        selected = filedialog.askdirectory(title="Choose patient data storage folder", initialdir=self._storage_root_var.get())
+        if selected:
+            self._storage_root_var.set(selected)
+
+    def _open_patient_dialog(self) -> None:
+        if self._recorder.is_recording:
+            return
+
+        self._add_px_dialog_open = True
+        self._update_patient_controls()
+        c = self._colors
+
+        # Dialog colours — white background, dark text
+        DLG_BG      = "#FFFFFF"
+        DLG_FG      = "#1A1A1A"
+        DLG_FG_HINT = "#555555"
+        DLG_BORDER  = "#CCCCCC"
+        DLG_INPUT   = "#F5F5F5"
+        DLG_ACCENT  = "#0071E3"
+        DLG_BTN_SEC = "#E0E0E0"
+        DLG_BTN_ACT = "#C8C8C8"
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Add Patient")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        # Dialog window icon
+        try:
+            from PIL import Image, ImageTk as _ITk
+            import pathlib as _pl
+            _icon_path = _pl.Path(__file__).parent / "add-patient.png.png"
+            _img = Image.open(_icon_path).resize((32, 32), Image.LANCZOS)
+            _icon = _ITk.PhotoImage(_img)
+            dialog.iconphoto(False, _icon)
+            dialog._icon_ref = _icon  # keep reference alive
+        except Exception:
+            pass
+
+        dialog.resizable(True, True)
+
+        W, H = 660, 540
+        dialog.minsize(W, H)
+
+        self.root.update_idletasks()
+        rx = self.root.winfo_rootx() + (self.root.winfo_width()  - W) // 2
+        ry = self.root.winfo_rooty() + (self.root.winfo_height() - H) // 2
+        dialog.geometry(f"{W}x{H}+{rx}+{ry}")
+        dialog.configure(bg=DLG_BG)
+
+        # ── Header ──────────────────────────────────────────────────
+        hdr = tk.Frame(dialog, bg=DLG_BG)
+        hdr.pack(fill=tk.X, padx=28, pady=(20, 12))
+        tk.Label(
+            hdr, text="Add Patient",
+            font=("Segoe UI", 16, "bold"),
+            bg=DLG_BG, fg=DLG_FG,
+        ).pack(anchor=tk.W)
+        tk.Label(
+            hdr, text="Fields marked * are required",
+            font=("Segoe UI", 10, "bold"),
+            bg=DLG_BG, fg=DLG_FG_HINT,
+        ).pack(anchor=tk.W, pady=(4, 0))
+
+        tk.Frame(dialog, bg=DLG_BORDER, height=1).pack(fill=tk.X)
+
+        # ── Body ────────────────────────────────────────────────────
+        body = tk.Frame(dialog, bg=DLG_BG)
+        body.pack(fill=tk.BOTH, expand=True, padx=28, pady=16)
+        body.columnconfigure(0, minsize=160)
+        body.columnconfigure(1, weight=1)
+        body.columnconfigure(2, minsize=90)
+
+        patient_id   = tk.StringVar()
+        patient_name = tk.StringVar()
+        hvid_od      = tk.StringVar()
+        hvid_os      = tk.StringVar()
+        pentacam_od  = tk.StringVar()
+        pentacam_os  = tk.StringVar()
+
+        LBL_FONT = ("Segoe UI", 11, "bold")
+        ENT_FONT = ("Segoe UI", 11, "bold")
+        BTN_FONT = ("Segoe UI", 10, "bold")
+
+        def _field(grid_row, label_text, var, browse=False):
+            tk.Label(
+                body, text=label_text,
+                font=LBL_FONT,
+                bg=DLG_BG, fg=DLG_FG,
+                anchor=tk.W,
+            ).grid(row=grid_row, column=0, sticky=tk.W, pady=7, padx=(0, 14))
+
+            ent = tk.Entry(
+                body, textvariable=var,
+                font=ENT_FONT,
+                bg=DLG_INPUT, fg=DLG_FG,
+                insertbackground=DLG_FG,
+                relief=tk.FLAT, bd=0,
+                highlightthickness=1,
+                highlightbackground=DLG_BORDER,
+                highlightcolor=DLG_ACCENT,
+            )
+            ent.grid(row=grid_row, column=1, sticky=tk.EW, pady=7, ipady=7)
+
+            if browse:
+                lbl_copy = label_text
+                tk.Button(
+                    body, text="Browse",
+                    font=BTN_FONT,
+                    bg=DLG_BTN_SEC, fg=DLG_FG,
+                    activebackground=DLG_BTN_ACT, activeforeground=DLG_FG,
+                    relief=tk.FLAT, bd=0, padx=10, pady=5, cursor="hand2",
+                    command=lambda t=var, l=lbl_copy: t.set(
+                        filedialog.askopenfilename(
+                            title=l,
+                            filetypes=[
+                                ("Pentacam files", "*.jpg *.jpeg *.png *.pdf"),
+                                ("All files", "*.*"),
+                            ],
+                        )
+                    ),
+                ).grid(row=grid_row, column=2, sticky=tk.EW, padx=(10, 0), pady=7)
+
+        _field(0, "Patient ID *",       patient_id)
+        _field(1, "Patient Name *",     patient_name)
+        _field(2, "HVID OD (optional)", hvid_od)
+        _field(3, "HVID OS (optional)", hvid_os)
+        _field(4, "Pentacam OD (optional)", pentacam_od, browse=True)
+        _field(5, "Pentacam OS (optional)", pentacam_os, browse=True)
+
+        tk.Frame(dialog, bg=DLG_BORDER, height=1).pack(fill=tk.X)
+
+        # ── Footer ──────────────────────────────────────────────────
+        foot = tk.Frame(dialog, bg=DLG_BG)
+        foot.pack(fill=tk.X, padx=28, pady=16)
+
+        tk.Button(
+            foot, text="Cancel",
+            font=BTN_FONT,
+            bg=DLG_BTN_SEC, fg=DLG_FG,
+            activebackground=DLG_BTN_ACT, activeforeground=DLG_FG,
+            relief=tk.FLAT, bd=0, padx=22, pady=8, cursor="hand2",
+            command=dialog.destroy,
+        ).pack(side=tk.RIGHT, padx=(10, 0))
+
+        add_btn = tk.Button(
+            foot, text="Add Patient",
+            font=("Segoe UI", 10, "bold"),
+            bg=DLG_BTN_SEC, fg=DLG_FG_HINT,
+            activebackground=DLG_ACCENT, activeforeground="#FFFFFF",
+            relief=tk.FLAT, bd=0, padx=22, pady=8, cursor="hand2",
+            state=tk.DISABLED,
+        )
+        add_btn.pack(side=tk.RIGHT)
+
+        def _update_enabled(*_):
+            ok = bool(patient_id.get().strip() and patient_name.get().strip())
+            add_btn.config(
+                state=tk.NORMAL if ok else tk.DISABLED,
+                bg=DLG_ACCENT      if ok else DLG_BTN_SEC,
+                fg="#FFFFFF"       if ok else DLG_FG_HINT,
+            )
+
+        patient_id.trace_add("write", _update_enabled)
+        patient_name.trace_add("write", _update_enabled)
+
+        def create_patient():
+            if not self._save_storage_settings():
+                return
+            try:
+                root = Path(self._storage_root_var.get())
+                patient_dir = (
+                    root
+                    / f"PX_{self._safe_folder_name(patient_id.get())}"
+                      f"_{self._safe_folder_name(patient_name.get())}"
+                )
+                for eye in ("OD", "OS"):
+                    (patient_dir / eye / "Pentacam").mkdir(parents=True, exist_ok=True)
+                metadata = {
+                    "patient_id":   patient_id.get().strip(),
+                    "patient_name": patient_name.get().strip(),
+                    "hvid":         {"OD": hvid_od.get().strip(), "OS": hvid_os.get().strip()},
+                    "created_at":   time.strftime("%Y-%m-%d %H:%M:%S"),
+                }
+                (patient_dir / "patient.txt").write_text(
+                    "# Patient Record - Medevplus IXcentai\n"
+                    f"patient_id={metadata['patient_id']}\n"
+                    f"patient_name={metadata['patient_name']}\n"
+                    f"hvid_od={metadata['hvid']['OD']}\n"
+                    f"hvid_os={metadata['hvid']['OS']}\n"
+                    f"created_at={metadata['created_at']}\n",
+                    encoding="utf-8",
+                )
+                for eye, source in (("OD", pentacam_od.get()), ("OS", pentacam_os.get())):
+                    (patient_dir / eye / "Pentacam" / "pentacam_values.txt").write_text(
+                        f"# Pentacam Values - {eye}\nhvid={metadata['hvid'][eye]}\n",
+                        encoding="utf-8",
+                    )
+                    if source:
+                        src = Path(source)
+                        if src.is_file():
+                            shutil.copy2(src, patient_dir / eye / "Pentacam" / src.name)
+                self._active_patient_dir = patient_dir
+                self._patient_id_var.set(metadata["patient_id"])
+                self._patient_name_var.set(metadata["patient_name"])
+                self._selected_eye_var.set("")
+                self._patient_summary_var.set(
+                    f"PX: {metadata['patient_id']} \u2014 {metadata['patient_name']}"
+                    " (choose OD or OS)"
+                )
+                self._recording_location_var.set(f"Patient folder: {patient_dir}")
+                self._add_px_dialog_open = False
+                self._update_patient_controls()
+                self._status_var.set(f"Patient folder created \u2192 {patient_dir}")
+                dialog.destroy()
+            except OSError as exc:
+                messagebox.showerror(
+                    "Patient creation error",
+                    f"Could not create patient folder:\n{exc}",
+                )
+
+        def close_dialog() -> None:
+            self._add_px_dialog_open = False
+            self._update_patient_controls()
+            dialog.destroy()
+
+        add_btn.config(command=create_patient)
+        dialog.bind(
+            "<Return>",
+            lambda _e: create_patient() if add_btn.cget("state") == tk.NORMAL else None,
+        )
+        dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+        dialog.wait_visibility()
+        dialog.focus_set()
+
+
+    def _set_patient_btn_colors(self) -> None:
+        active_eye = self._selected_eye_var.get()
+        has_patient = self._active_patient_dir is not None
+        add_px_active = bool(getattr(self, "_add_px_dialog_open", False))
+
+        if hasattr(self, "_add_px_btn"):
+            if isinstance(self._add_px_btn, tk.Button):
+                self._add_px_btn.config(
+                    state=tk.DISABLED if self._recorder.is_recording else tk.NORMAL,
+                    bg=self._colors.BTN_ACTION if add_px_active else self._colors.BTN_BG,
+                    fg=self._colors.BTN_PRIMARY if add_px_active else self._colors.FG_PRIMARY,
+                    activebackground=self._colors.BTN_ACTION if add_px_active else self._colors.BTN_HOVER,
+                    activeforeground=self._colors.BTN_PRIMARY,
+                )
+            else:
+                self._add_px_btn.configure(
+                    style="ToolbarActive.TButton" if add_px_active else "TButton",
+                )
+
+        for button in getattr(self, "_eye_buttons", []):
+            text = str(button.cget("text"))
+            is_active = has_patient and active_eye == text
+            button.configure(style="ToolbarActive.TButton" if is_active else "TButton")
+            button.config(state=tk.DISABLED if self._recorder.is_recording or not has_patient else tk.NORMAL)
+
+    def _select_eye(self, eye: str) -> None:
+        if self._recorder.is_recording or self._active_patient_dir is None:
+            return
+        self._selected_eye_var.set(eye)
+        target = self._active_patient_dir / eye
+        self._recording_location_var.set(f"Recording folder: {target}")
+        self._patient_summary_var.set(f"PX: {self._patient_id_var.get()} — {self._patient_name_var.get()} | Eye: {eye}")
+        self._update_patient_controls()
+
+    def _update_patient_controls(self) -> None:
+        locked = self._recorder.is_recording
+        if hasattr(self, "_add_px_btn"):
+            self._add_px_btn.config(state=tk.DISABLED if locked else tk.NORMAL)
+        for button in getattr(self, "_eye_buttons", []):
+            button.config(state=tk.DISABLED if locked or self._active_patient_dir is None else tk.NORMAL)
+        self._set_patient_btn_colors()
+
+    def _patient_recording_path(self) -> Optional[str]:
+        if self._active_patient_dir is None or self._selected_eye_var.get() not in ("OD", "OS"):
+            messagebox.showinfo("Patient and eye required", "Click Add PX, then select OD or OS before starting a recording.")
+            return None
+        eye_dir = self._active_patient_dir / self._selected_eye_var.get()
+        eye_dir.mkdir(parents=True, exist_ok=True)
+        return str(eye_dir / f"detection_{time.strftime('%Y%m%d_%H%M%S')}.mp4")
+
     def _choose_recording_path(self) -> Optional[str]:
         """Ask user where to save the recording."""
         default_name = self._recording_default_path_var.get()
@@ -444,9 +780,13 @@ class PupilTrackingGUI:
             )
             return
 
-        path = self._choose_recording_path()
+        path = self._patient_recording_path()
         if not path:
             return
+
+        # The companion CSV should describe this recording only, never frames
+        # viewed while preparing the camera or a prior patient session.
+        self._results_history.clear()
 
         # Prepare a frame that includes the measurements panel so the
         # recording captures the full on-screen layout (image + table).
@@ -471,20 +811,38 @@ class PupilTrackingGUI:
             return
 
         self._recording_path = path
+
+        # ── Start parallel clean RAW stream recording if enabled ──────
+        self._raw_recording_path = None
+        if self._dual_recording_var.get() and self._current_image is not None:
+            raw_h, raw_w = self._current_image.shape[:2]
+            p = Path(path)
+            raw_path = str(p.with_name(f"{p.stem}_raw{p.suffix}"))
+            if self._raw_recorder.start(raw_path, raw_w, raw_h, target_fps):
+                self._raw_recording_path = raw_path
+                self.logger.info("Clean RAW stream recording started → %s", raw_path)
+            else:
+                self.logger.warning("Failed to start RAW stream recorder at %s", raw_path)
+
         self._recording_default_path_var.set(
             f"recording_{time.strftime('%Y%m%d_%H%M%S')}.mp4"
         )
 
         self._update_recording_ui(started=True)
-        self._status_var.set(f"Recording started → {path}")
+        self._update_patient_controls()
+        status_msg = f"Recording started → {path}"
+        if self._raw_recording_path:
+            status_msg += f" (+ Clean RAW: {Path(self._raw_recording_path).name})"
+        self._status_var.set(status_msg)
         self._start_recording_timer()
 
     def _stop_recording(self) -> None:
         """Stop recording and save the video file."""
-        if not self._recorder.is_recording:
+        if not self._recorder.is_recording and not self._raw_recorder.is_recording:
             return
 
         path = self._recorder.stop()
+        raw_path = self._raw_recorder.stop() if self._raw_recorder.is_recording else None
         self._stop_recording_timer()
 
         elapsed = (
@@ -497,9 +855,20 @@ class PupilTrackingGUI:
         )
 
         self._update_recording_ui(started=False)
-        self._status_var.set(
-            f"Recording saved: {frame_count} frames in {elapsed:.1f}s → {path or 'unknown'}"
-        )
+        csv_path = None
+        if path and self._results_history:
+            csv_path = str(Path(path).with_suffix(".csv"))
+            self._export_csv(csv_path, show_success=False)
+        self._update_patient_controls()
+        saved_message = f"Recording saved: {frame_count} frames in {elapsed:.1f}s → {path or 'unknown'}"
+        if raw_path:
+            saved_message += f"\nClean RAW stream → {raw_path}"
+        if csv_path:
+            saved_message += f"\nTelemetry CSV → {csv_path}"
+        self._recording_location_var.set(saved_message)
+        self._status_var.set(f"Saved: {frame_count} frames in {elapsed:.1f}s")
+        if path:
+            messagebox.showinfo("Dual Recording Saved", saved_message)
 
     def _toggle_recording(self) -> None:
         """Toggle recording on/off."""
@@ -514,7 +883,6 @@ class PupilTrackingGUI:
             elapsed = status.get("elapsed_time", 0)
             fps = status.get("fps", 0)
             dropped = status.get("dropped_frames", 0)
-            frames = status.get("frame_count", 0)
 
             mins, secs = divmod(int(elapsed), 60)
             self._recording_indicator.config(
@@ -536,7 +904,6 @@ class PupilTrackingGUI:
         if self._recorder.is_recording:
             elapsed = self._recorder.elapsed_time
             fps = self._recorder.frame_count / elapsed if elapsed > 0 else 0
-            dropped = self._recorder.dropped_frames
 
             mins, secs = divmod(int(elapsed), 60)
             self._recording_indicator.config(
@@ -565,9 +932,14 @@ class PupilTrackingGUI:
 
     def _write_frame_to_recorder(self, frame: np.ndarray) -> None:
         """Write a frame to the recorder (non-blocking)."""
-        # If recording, ensure we write the full composed UI (image +
-        # measurements panel). The provided `frame` may be just the
-        # image area, so construct the composite using current state.
+        # 1. Write clean pristine raw frame to raw recorder for training
+        try:
+            if self._raw_recorder.is_recording and self._current_image is not None:
+                self._raw_recorder.write(self._current_image)
+        except Exception:
+            pass
+
+        # 2. Write composed UI overlay (image + measurements panel) to overlay recorder
         try:
             if self._recorder.is_recording and self._current_image is not None:
                 display_image = self._prepare_recording_frame(
@@ -580,7 +952,8 @@ class PupilTrackingGUI:
             # Fall back to naive write if composition fails
             pass
 
-        self._recorder.write(frame)
+        if self._recorder.is_recording:
+            self._recorder.write(frame)
 
     def _prepare_recording_frame(self, frame: np.ndarray, result: Any) -> np.ndarray:
         """Prepare a frame that mirrors the current on-screen display for recording."""
@@ -660,13 +1033,12 @@ class PupilTrackingGUI:
                 ],
             ),
             (
-                "CALIBRATION",
-                self._hex_to_bgr(self._colors.CALIBRATION),
+                "CORNEAL DIMENSIONS (WTW)",
+                self._hex_to_bgr(self._colors.LIMBUS),
                 [
-                    ("Source", self._cv_vars["source"].get()),
-                    ("px/mm", self._cv_vars["scale_px"].get()),
-                    ("mm/px", self._cv_vars["scale_mm"].get()),
-                    ("Reference", self._cv_vars["reference"].get()),
+                    ("Horizontal", self._wtw_vars["horizontal"].get()),
+                    ("Vertical", self._wtw_vars["vertical"].get()),
+                    ("Mean", self._wtw_vars["mean"].get()),
                 ],
             ),
             (
@@ -857,7 +1229,7 @@ class PupilTrackingGUI:
         file_menu.add_command(label="Open Folder…", command=self._open_folder)
         file_menu.add_separator()
         file_menu.add_command(label="Export Results CSV…", command=self._export_csv)
-        file_menu.add_command(label="Export Results JSON…", command=self._export_json)
+        file_menu.add_command(label="Export Results TXT…", command=self._export_txt)
         file_menu.add_command(label="Save Snapshot…", command=self._export_snapshot)
         file_menu.add_separator()
         file_menu.add_command(label="Save Snapshot…", command=self._export_snapshot)
@@ -966,19 +1338,75 @@ class PupilTrackingGUI:
     # Toolbar
     # ================================================================
 
-    def _build_toolbar(self) -> None:
-        toolbar = ttk.Frame(self.root, style="Primary.TFrame")
-        toolbar.pack(side=tk.TOP, fill=tk.X, padx=0, pady=(0, 1))
+    def _toolbar_set_active(self, active_btn) -> None:
+        """Highlight active_btn blue; reset all other tracked toolbar buttons."""
+        for btn in getattr(self, "_toolbar_tracked_btns", []):
+            try:
+                is_active = btn is active_btn
+                if isinstance(btn, tk.Button):
+                    btn.config(
+                        bg=self._colors.BTN_ACTION if is_active else self._colors.BTN_BG,
+                        fg=self._colors.BTN_PRIMARY if is_active else self._colors.FG_PRIMARY,
+                    )
+                else:
+                    btn.configure(style="ToolbarActive.TButton" if is_active else "TButton")
+            except Exception:
+                pass
 
-        ttk.Button(toolbar, text="📂 Image", command=self._open_image).pack(
-            side=tk.LEFT, padx=2
+    def _build_toolbar(self) -> None:
+        c = self._colors
+        # Outer bar spans the window: it holds the horizontally scrollable
+        # ribbon on the left and a pinned, always-visible quality badge on
+        # the right (the badge must never scroll out of view).
+        bar = ttk.Frame(self.root, style="Primary.TFrame")
+        bar.pack(side=tk.TOP, fill=tk.X, padx=0, pady=(0, 1))
+
+        self._quality_label = ttk.Label(
+            bar,
+            text="  NO IMAGE  ",
+            style="Quality.TLabel",
+            anchor="center",
         )
-        ttk.Button(toolbar, text="🎞 Video", command=self._open_video).pack(
-            side=tk.LEFT, padx=2
+        self._quality_label.pack(side=tk.RIGHT, padx=10)
+
+        # Scrollable ribbon: a Canvas hosting an inner frame, with a slider
+        # (horizontal scrollbar) that appears only when the ribbon overflows
+        # the available width so every button stays reachable.
+        scroll_wrap = ttk.Frame(bar, style="Primary.TFrame")
+        scroll_wrap.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self._toolbar_canvas = tk.Canvas(
+            scroll_wrap,
+            bg=c.BG_PRIMARY,
+            highlightthickness=0,
+            borderwidth=0,
+            height=1,
         )
-        ttk.Button(toolbar, text="📷 Camera", command=self._start_camera).pack(
-            side=tk.LEFT, padx=2
+        self._toolbar_scroll = ttk.Scrollbar(
+            scroll_wrap,
+            orient=tk.HORIZONTAL,
+            command=self._toolbar_canvas.xview,
         )
+        self._toolbar_canvas.configure(xscrollcommand=self._toolbar_scroll.set)
+        self._toolbar_canvas.pack(side=tk.TOP, fill=tk.X, expand=True)
+        # The scrollbar is packed/unpacked on demand by _sync_toolbar().
+        self._toolbar_scroll_shown = False
+
+        # Inner frame kept as ``toolbar`` so all button rows below are hosted
+        # inside the scrollable area unchanged.
+        toolbar = ttk.Frame(self._toolbar_canvas, style="Primary.TFrame")
+        self._toolbar_inner = toolbar
+        self._toolbar_window = self._toolbar_canvas.create_window(
+            (0, 0), window=toolbar, anchor="nw"
+        )
+        self._toolbar_tracked_btns: list = []
+
+        _vid_btn = ttk.Button(toolbar, text="🏞️ Video", command=lambda: [self._open_video(), self._toolbar_set_active(_vid_btn)])
+        _vid_btn.pack(side=tk.LEFT, padx=2)
+        self._toolbar_tracked_btns.append(_vid_btn)
+        _cam_btn = ttk.Button(toolbar, text="📷 Camera", command=lambda: [self._start_camera(), self._toolbar_set_active(_cam_btn)])
+        _cam_btn.pack(side=tk.LEFT, padx=2)
+        self._toolbar_tracked_btns.append(_cam_btn)
 
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
 
@@ -989,10 +1417,52 @@ class PupilTrackingGUI:
             state=tk.DISABLED,
         )
         self._pause_btn.pack(side=tk.LEFT, padx=2)
+        self._pause_btn.pack(side=tk.LEFT, padx=2)
+        self._toolbar_tracked_btns.append(self._pause_btn)
+        _stop_btn = ttk.Button(toolbar, text="⏹ Stop", command=lambda: [self._stop_video(), self._toolbar_set_active(None)])
+        _stop_btn.pack(side=tk.LEFT, padx=2)
+        self._toolbar_tracked_btns.append(_stop_btn)
 
-        ttk.Button(toolbar, text="⏹ Stop", command=self._stop_video).pack(
-            side=tk.LEFT, padx=2
-        )
+        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
+        # Load Add PX icon for toolbar button
+        try:
+            from PIL import Image as _PILImg, ImageTk as _PILITk
+            import pathlib as _pl
+            _apx_icon_path = _pl.Path(__file__).parent / "pupil_tracking" / "interface" / "add-patient.png.png"
+            if not _apx_icon_path.exists():
+                _apx_icon_path = _pl.Path("pupil_tracking") / "interface" / "add-patient.png.png"
+            _apx_img = _PILImg.open(_apx_icon_path).resize((18, 18), _PILImg.LANCZOS)
+            self._add_px_icon = _PILITk.PhotoImage(_apx_img)
+        except Exception:
+            self._add_px_icon = None
+
+        if self._add_px_icon:
+            self._add_px_btn = tk.Button(
+                toolbar,
+                text=" Add PX",
+                image=self._add_px_icon,
+                compound=tk.LEFT,
+                font=("Segoe UI", 10),
+                bg=self._colors.BTN_BG,
+                fg=self._colors.FG_PRIMARY,
+                activebackground=self._colors.BTN_ACTIVE,
+                activeforeground=self._colors.FG_PRIMARY,
+                relief=tk.FLAT, bd=0, padx=6, pady=3, cursor="hand2",
+                command=lambda: [self._open_patient_dialog(), self._toolbar_set_active(self._add_px_btn)],
+            )
+        else:
+            self._add_px_btn = ttk.Button(
+                toolbar,
+                text="⊕ Add PX",
+                command=lambda: [self._open_patient_dialog(), self._toolbar_set_active(self._add_px_btn)],
+            )
+        self._toolbar_tracked_btns.append(self._add_px_btn)
+        self._add_px_btn.pack(side=tk.LEFT, padx=2)
+        self._eye_buttons: List[ttk.Button] = []
+        for eye in ("OD", "OS"):
+            button = ttk.Button(toolbar, text=eye, command=lambda current_eye=eye: self._select_eye(current_eye), state=tk.DISABLED)
+            button.pack(side=tk.LEFT, padx=2)
+            self._eye_buttons.append(button)
 
         # ══════════════════════════════════════════════════════════
         # RECORDING — Recording toolbar button
@@ -1011,6 +1481,13 @@ class PupilTrackingGUI:
             foreground="#616161",
         )
         self._recording_indicator.pack(side=tk.LEFT, padx=(0, 4))
+
+        self._dual_rec_check = ttk.Checkbutton(
+            toolbar,
+            text="Dual Rec (Raw+Overlay)",
+            variable=self._dual_recording_var,
+        )
+        self._dual_rec_check.pack(side=tk.LEFT, padx=(2, 4))
         # ══════════════════════════════════════════════════════════
 
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
@@ -1028,68 +1505,67 @@ class PupilTrackingGUI:
         )
         self._gray_btn.pack(side=tk.LEFT, padx=2)
 
-        self._gray_indicator = ttk.Label(
-            toolbar,
-            text="  RGB  ",
-            style="Quality.TLabel",
-            foreground=_GRAYSCALE_COLORS["off"],
-        )
-        self._gray_indicator.pack(side=tk.LEFT, padx=(0, 4))
-
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
         self._roi_btn = ttk.Button(
             toolbar,
-            text="Set ROI",
-            command=self._begin_roi_selection,
+            text="ROI",
+            command=self._toggle_roi,
         )
         self._roi_btn.pack(side=tk.LEFT, padx=2)
-        ttk.Button(
-            toolbar,
-            text="Clear ROI",
-            command=self._clear_manual_roi,
-        ).pack(side=tk.LEFT, padx=2)
-        ttk.Label(
-            toolbar,
-            textvariable=self._roi_status_var,
-            style="Muted.TLabel",
-        ).pack(side=tk.LEFT, padx=(4, 8))
 
         self._ring_btn = ttk.Button(
             toolbar,
-            text="Set Ring",
-            command=self._begin_ring_selection,
+            text="Ring",
+            command=self._toggle_ring,
         )
         self._ring_btn.pack(side=tk.LEFT, padx=2)
-        ttk.Button(
-            toolbar,
-            text="Clear Ring",
-            command=self._clear_manual_ring,
-        ).pack(side=tk.LEFT, padx=2)
-        ttk.Label(
-            toolbar,
-            textvariable=self._ring_status_var,
-            style="Muted.TLabel",
-        ).pack(side=tk.LEFT, padx=(4, 8))
 
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
-        ttk.Button(toolbar, text="📏 Scale Wizard", command=self._open_calibration_wizard).pack(
-            side=tk.LEFT, padx=2
-        )
-        ttk.Button(toolbar, text="Export CSV", command=self._export_csv).pack(
-            side=tk.LEFT, padx=2
-        )
-        ttk.Button(toolbar, text="Snapshot", command=self._export_snapshot).pack(
-            side=tk.LEFT, padx=2
-        )
+        _csv_btn = ttk.Button(toolbar, text="Export CSV", command=lambda: [self._export_csv(), self._toolbar_set_active(_csv_btn)])
+        _csv_btn.pack(side=tk.LEFT, padx=2)
+        self._toolbar_tracked_btns.append(_csv_btn)
+        _snap_btn = ttk.Button(toolbar, text="Snapshot", command=lambda: [self._export_snapshot(), self._toolbar_set_active(_snap_btn)])
+        _snap_btn.pack(side=tk.LEFT, padx=2)
+        self._toolbar_tracked_btns.append(_snap_btn)
 
 
-        self._quality_label = ttk.Label(
-            toolbar,
-            text="  NO IMAGE  ",
-            style="Quality.TLabel",
-            anchor="center",
-        )
-        self._quality_label.pack(side=tk.RIGHT, padx=10)
+        # ── Horizontal scroll plumbing ──────────────────────────────
+        # Keeps the canvas exactly one ribbon-row tall, updates the
+        # scrollable region, and shows the slider only when the ribbon is
+        # wider than the visible area.
+        def _sync_toolbar(_event=None) -> None:
+            canvas = self._toolbar_canvas
+            inner = self._toolbar_inner
+            req_w = inner.winfo_reqwidth()
+            req_h = inner.winfo_reqheight()
+            # Match the canvas height to the ribbon only when it actually
+            # changes, so we never fight the canvas <Configure> event.
+            if req_h != getattr(self, "_toolbar_req_h", None):
+                self._toolbar_req_h = req_h
+                canvas.configure(height=req_h)
+            canvas.configure(scrollregion=(0, 0, req_w, req_h))
+            need = req_w > canvas.winfo_width() + 1
+            if need and not self._toolbar_scroll_shown:
+                self._toolbar_scroll.pack(side=tk.BOTTOM, fill=tk.X)
+                self._toolbar_scroll_shown = True
+            elif not need and self._toolbar_scroll_shown:
+                self._toolbar_scroll.pack_forget()
+                self._toolbar_scroll_shown = False
+                canvas.xview_moveto(0.0)
+
+        def _on_toolbar_wheel(event) -> str:
+            # Wheel (and Shift+wheel) over the ribbon scrolls it sideways.
+            if self._toolbar_scroll_shown and event.delta:
+                self._toolbar_canvas.xview_scroll(
+                    int(-event.delta / 120), "units"
+                )
+            return "break"
+
+        self._toolbar_inner.bind("<Configure>", _sync_toolbar)
+        self._toolbar_canvas.bind("<Configure>", _sync_toolbar)
+        self._toolbar_canvas.bind("<MouseWheel>", _on_toolbar_wheel)
+        self._toolbar_canvas.bind("<Shift-MouseWheel>", _on_toolbar_wheel)
+        self._toolbar_canvas.after_idle(_sync_toolbar)
 
     # ================================================================
     # Main Area
@@ -1206,6 +1682,17 @@ class PupilTrackingGUI:
 
         sn = ("Consolas", 9)
         sw = 24
+
+        storage_lf = ttk.LabelFrame(sf, text="Patient Data Storage", padding=8)
+        storage_lf.pack(fill=tk.X, padx=4, pady=4)
+        ttk.Label(storage_lf, text="Set this once during installation. You can change it later.", style="Muted.TLabel").pack(anchor=tk.W, pady=(0, 6))
+        storage_row = ttk.Frame(storage_lf)
+        storage_row.pack(fill=tk.X)
+        ttk.Entry(storage_row, textvariable=self._storage_root_var, font=sn).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(storage_row, text="Browse…", command=self._choose_storage_root).pack(side=tk.LEFT, padx=(6, 0))
+        ttk.Button(storage_lf, text="Save storage location", command=self._save_storage_settings).pack(anchor=tk.W, pady=(6, 0))
+        ttk.Label(storage_lf, text="Structure: PX_ID_Name / OD or OS / detection video + CSV + Pentacam", style="Muted.TLabel").pack(anchor=tk.W, pady=(6, 0))
+        ttk.Label(storage_lf, textvariable=self._recording_location_var, style="Tiny.TLabel", wraplength=430, justify=tk.LEFT).pack(anchor=tk.W, pady=(4, 0))
 
         # ══════════════════════════════════════════════════════════
         # GRAYSCALE GUI 8 of 12 — Grayscale section in Settings
@@ -1427,7 +1914,7 @@ class PupilTrackingGUI:
         ).pack(anchor=tk.W, pady=(0, 4))
 
         for mode_val, mode_text in [
-            ("ANATOMICAL_ANCHOR", "Anatomical Anchor (Cornea ≈ 11.5 mm)"),
+            ("ANATOMICAL_ANCHOR", "Anatomical Anchor (Cornea ≈ 12.0 mm)"),
             ("FIXED_PIXEL_SCALE", "Fixed Pixel Scale (Manual / External Target)"),
             ("RING_REFLECTION", "Ring Reflection (Purkinje / Placido Ring)"),
         ]:
@@ -1659,6 +2146,13 @@ class PupilTrackingGUI:
             summary_outer, "Pipeline", 3
         )
 
+        ttk.Label(
+            scroll_frame,
+            textvariable=self._patient_summary_var,
+            style="Muted.TLabel",
+            anchor="w",
+        ).pack(fill=tk.X, padx=6, pady=(0, 6))
+
         cards_outer = ttk.Frame(scroll_frame, style="Primary.TFrame")
         cards_outer.pack(fill=tk.BOTH, expand=True)
         cards_outer.columnconfigure(0, weight=1, uniform="measurement_cards")
@@ -1722,9 +2216,6 @@ class PupilTrackingGUI:
         self._wtw_vars["horizontal"] = add_row(wtw_frame, "Horizontal WTW:")
         self._wtw_vars["vertical"] = add_row(wtw_frame, "Vertical WTW:")
         self._wtw_vars["mean"] = add_row(wtw_frame, "Mean WTW:")
-        self._wtw_vars["astigmatism"] = add_row(wtw_frame, "Astigmatism:")
-        self._wtw_vars["status"] = add_row(wtw_frame, "Status:")
-        self._wtw_vars["mode"] = add_row(wtw_frame, "Scale Standard:")
 
         proc_frame = add_card(cards_outer, "PROCESSING", "ProcHeader.TLabel", 3, 0, 2)
         self._proc_time_var = add_row(proc_frame, "Proc. Time:")
@@ -1930,6 +2421,67 @@ class PupilTrackingGUI:
         )
         self._refresh_display()
 
+        # When calibration changes, re-compute mm values on the
+        # currently displayed result so the measurement panel updates
+        # immediately (without requiring a new image load / detection).
+        if "calibration" in reasons and self._current_result is not None:
+            res = self._current_result
+            new_cal = self._detector._calibration if self._detector is not None else None
+            if new_cal is not None and new_cal.calibrated:
+                res.calibration = new_cal
+            elif (
+                new_cal is not None
+                and not new_cal.calibrated
+                and getattr(res, "limbus", None) is not None
+                and getattr(res.limbus, "detected", False)
+                and getattr(res.limbus, "ellipse", None) is not None
+            ):
+                # ANATOMICAL_ANCHOR after reset: _current_best() returns
+                # uncalibrated because _ema_px_per_mm is None.  Compute
+                # the tautological calibration from the current result's
+                # pixel geometry so the panel shows correct values.
+                ep = res.limbus.ellipse
+                corneal_mm = float(self._corneal_ref_mm_var.get())
+                dia_px = ep.semi_major * 2.0
+                if dia_px > 10:
+                    res.calibration = CalibrationInfo(
+                        calibrated=True,
+                        px_per_mm=dia_px / corneal_mm,
+                        mm_per_px=corneal_mm / dia_px,
+                        source="anatomical_on_switch",
+                        method="anatomical",
+                        corneal_diameter_assumed_mm=corneal_mm,
+                    )
+            # Clear stale pre-computed mm attributes that were set by
+            # _add_mm_values / evaluate_clinical_wtw during the original
+            # detection.  These would otherwise be read by the display
+            # code and show values computed with the OLD calibration.
+            # (LimbusDetection/PupilDetection are dataclasses, so we
+            # reset fields to None rather than delattr which does not
+            # truly remove dataclass fields.)
+            for target in (
+                getattr(res, "limbus", None),
+                getattr(res, "pupil", None),
+            ):
+                if target is None:
+                    continue
+                for attr in (
+                    "wtw_horizontal_mm",
+                    "wtw_vertical_mm",
+                    "wtw_mean_mm",
+                    "wtw_astigmatism_mm",
+                    "is_wtw_measured",
+                    "wtw_validity_status",
+                    "radius_mm",
+                    "center_mm",
+                ):
+                    if hasattr(target, attr):
+                        try:
+                            setattr(target, attr, None)
+                        except Exception:
+                            pass
+            self._update_measurements(res)
+
     def _restart_active_stream(
         self, reason: str, rebuild_engine: bool = False
     ) -> None:
@@ -2134,7 +2686,7 @@ class PupilTrackingGUI:
         self._summary_tracking_label.config(foreground=tracking_color)
 
     def _toggle_pause(self) -> None:
-        if not self._video_running:
+        if self._awaiting_roi or not self._video_running:
             return
         self._video_paused = not self._video_paused
         if self._video_paused:
@@ -2143,6 +2695,30 @@ class PupilTrackingGUI:
         else:
             self._pause_btn.config(text="⏸ Pause")
             self._status_var.set("Resumed")
+
+    def _sync_roi_ring_button_styles(self) -> None:
+        if hasattr(self, "_roi_btn"):
+            is_active = self._roi_edit_active or self._manual_roi is not None
+            self._roi_btn.configure(style="ROIActive.TButton" if is_active else "TButton")
+            self._roi_btn.config(text="Clear ROI" if is_active else "ROI")
+        if hasattr(self, "_ring_btn"):
+            is_active = self._ring_edit_active or self._manual_ring is not None
+            self._ring_btn.configure(style="RingActive.TButton" if is_active else "TButton")
+            self._ring_btn.config(text="Clear Ring" if is_active else "Ring")
+
+    def _toggle_roi(self) -> None:
+        """Single toggle: if ROI is active/editing → clear it; otherwise begin selection."""
+        if self._roi_edit_active or self._manual_roi is not None:
+            self._clear_manual_roi()
+        else:
+            self._begin_roi_selection()
+
+    def _toggle_ring(self) -> None:
+        """Single toggle: if ring is active/editing → clear it; otherwise begin selection."""
+        if self._ring_edit_active or self._manual_ring is not None:
+            self._clear_manual_ring()
+        else:
+            self._begin_ring_selection()
 
     def _begin_roi_selection(self) -> None:
         if self._current_image is None:
@@ -2170,8 +2746,7 @@ class PupilTrackingGUI:
                 "frame_height": float(h),
             }
         self._canvas.configure(cursor="tcross")
-        if hasattr(self, "_roi_btn"):
-            self._roi_btn.config(text="Edit ROI")
+        self._sync_roi_ring_button_styles()
         self._roi_status_var.set("Manual ROI: Editing")
         self._status_var.set(
             "ROI edit mode: drag inside to move, drag rim to resize, Enter to apply, Esc to cancel"
@@ -2196,8 +2771,7 @@ class PupilTrackingGUI:
         else:
             self._ring_preview = self._suggest_manual_ring_preview()
         self._canvas.configure(cursor="tcross")
-        if hasattr(self, "_ring_btn"):
-            self._ring_btn.config(text="Edit Ring")
+        self._sync_roi_ring_button_styles()
         self._ring_status_var.set("Manual Ring: Editing")
         self._status_var.set(
             "Ring edit mode: use only on docked frames, drag circle to match red dots, Enter to lock"
@@ -2212,11 +2786,22 @@ class PupilTrackingGUI:
         self._roi_edit_active = False
         self._roi_original_before_edit = None
         self._canvas.configure(cursor="crosshair")
-        if hasattr(self, "_roi_btn"):
-            self._roi_btn.config(text="Set ROI")
+        self._sync_roi_ring_button_styles()
         self._roi_status_var.set("Manual ROI: Off")
+        previous_suspend = self._suspend_live_settings_apply
+        self._suspend_live_settings_apply = True
+        try:
+            self._roi_var.set(False)
+        finally:
+            self._suspend_live_settings_apply = previous_suspend
+        if self._video_running:
+            self._awaiting_roi = True
+            self._status_var.set("Video waiting — set an ROI to resume detection")
+        if self._current_result is not None:
+            self._current_result = None
         if self._opt_processor is not None:
             self._opt_processor.clear_manual_roi()
+            self._opt_processor.update_runtime_settings(enable_auto_roi=False)
         self._refresh_display()
 
     def _clear_manual_ring(self) -> None:
@@ -2227,14 +2812,72 @@ class PupilTrackingGUI:
         self._ring_edit_active = False
         self._ring_original_before_edit = None
         self._canvas.configure(cursor="crosshair")
-        if hasattr(self, "_ring_btn"):
-            self._ring_btn.config(text="Set Ring")
+        self._sync_roi_ring_button_styles()
         self._ring_status_var.set("Manual Ring: Off")
         if self._opt_processor is not None:
             self._opt_processor.clear_manual_ring()
         if self._current_result is not None:
             self._apply_manual_ring_policy(self._current_result)
             self._update_measurements(self._current_result)
+            self._current_result.ring_status = "ring_absent"
+            self._current_result.ring_center = None
+            self._current_result.ring_radius = None
+        self._refresh_display()
+
+    def _cancel_roi_selection(self, event: Any = None) -> None:
+        # Abandon the in-progress edit and restore whatever ROI existed before
+        # it (may be None). If detection is still gated on the ROI, keep the
+        # frame frozen and re-prompt instead of starting.
+        self._manual_roi = (
+            dict(self._roi_original_before_edit)
+            if self._roi_original_before_edit is not None
+            else None
+        )
+        self._roi_preview = None
+        self._roi_drag_mode = None
+        self._roi_drag_offset = (0.0, 0.0)
+        self._roi_edit_active = False
+        self._roi_original_before_edit = None
+        self._canvas.configure(cursor="crosshair")
+        self._sync_roi_ring_button_styles()
+        if self._manual_roi is not None:
+            self._roi_status_var.set(
+                f"Manual ROI: On ({int(round(self._manual_roi['radius']))} px)"
+            )
+        else:
+            self._roi_status_var.set("Manual ROI: Off")
+        self._apply_manual_roi_to_processor()
+        if self._awaiting_roi:
+            self._status_var.set("ROI required — set an ROI to start detection")
+        else:
+            self._status_var.set("ROI selection cancelled")
+        self._refresh_display()
+
+    def _cancel_ring_selection(self, event: Any = None) -> None:
+        # Abandon the in-progress ring edit and restore the prior ring (or None).
+        self._manual_ring = (
+            dict(self._ring_original_before_edit)
+            if self._ring_original_before_edit is not None
+            else None
+        )
+        self._ring_preview = None
+        self._ring_drag_mode = None
+        self._ring_drag_offset = (0.0, 0.0)
+        self._ring_edit_active = False
+        self._ring_original_before_edit = None
+        self._canvas.configure(cursor="crosshair")
+        self._sync_roi_ring_button_styles()
+        if self._manual_ring is not None:
+            self._ring_status_var.set(
+                f"Manual Ring: Locked ({int(round(self._manual_ring['radius'] * 2.0))} px)"
+            )
+        else:
+            self._ring_status_var.set("Manual Ring: Off")
+        self._apply_manual_ring_to_processor()
+        if self._current_result is not None:
+            self._apply_manual_ring_policy(self._current_result)
+            self._update_measurements(self._current_result)
+        self._status_var.set("Ring selection cancelled")
         self._refresh_display()
 
     def _on_canvas_press(self, event: Any) -> None:
@@ -2342,14 +2985,22 @@ class PupilTrackingGUI:
         self._roi_edit_active = False
         self._roi_original_before_edit = None
         self._canvas.configure(cursor="crosshair")
-        if hasattr(self, "_roi_btn"):
-            self._roi_btn.config(text="Set ROI")
+        self._sync_roi_ring_button_styles()
         self._roi_status_var.set(
             f"Manual ROI: On ({int(round(self._manual_roi['radius']))} px)"
         )
         self._status_var.set("Manual ROI applied to live detection")
         self._apply_manual_roi_to_processor()
         self._refresh_display()
+        # If detection was gated on the ROI (freshly loaded video/camera),
+        # confirming the ROI is what actually starts the processing thread.
+        if self._awaiting_roi:
+            self._awaiting_roi = False
+            if self._pending_detection_start is not None:
+                start = self._pending_detection_start
+                self._pending_detection_start = None
+                self._pause_btn.config(state=tk.NORMAL, text="⏸ Pause")
+                start()
 
     def _confirm_ring_selection(self, event: Any = None) -> None:
         if not self._ring_edit_active:
@@ -2366,8 +3017,7 @@ class PupilTrackingGUI:
         self._ring_edit_active = False
         self._ring_original_before_edit = None
         self._canvas.configure(cursor="crosshair")
-        if hasattr(self, "_ring_btn"):
-            self._ring_btn.config(text="Set Ring")
+        self._sync_roi_ring_button_styles()
         self._ring_status_var.set(
             f"Manual Ring: Locked ({int(round(self._manual_ring['radius'] * 2.0))} px)"
         )
@@ -2612,11 +3262,11 @@ class PupilTrackingGUI:
         ttk.Button(ring_row, text="Apply Ring Mode", command=_apply_ring).pack(side=tk.LEFT, padx=8)
 
         # Method 4: Anatomical Baseline Anchor
-        m4 = ttk.LabelFrame(container, text="Method 4: Anatomical Baseline Anchor (11.5 mm)", padding=10)
+        m4 = ttk.LabelFrame(container, text="Method 4: Anatomical Baseline Anchor (12.0 mm)", padding=10)
         m4.pack(fill=tk.X, pady=4)
         ttk.Label(
             m4,
-            text="Assumes horizontal corneal diameter is 11.5 mm (not patient-specific).",
+            text="Assumes horizontal corneal diameter is 12.0 mm (not patient-specific).",
             style="Muted.TLabel",
             justify=tk.LEFT,
         ).pack(anchor=tk.W, pady=(0, 6))
@@ -2625,9 +3275,9 @@ class PupilTrackingGUI:
             self._calibration_mode_var.set("ANATOMICAL_ANCHOR")
             self._schedule_live_settings_apply("calibration")
             wizard.destroy()
-            messagebox.showinfo("Baseline Set", "Calibration set to 11.5 mm Anatomical Anchor.")
+            messagebox.showinfo("Baseline Set", "Calibration set to 12.0 mm Anatomical Anchor.")
 
-        ttk.Button(m4, text="Reset to 11.5 mm Baseline Anchor", command=_apply_anatomical).pack(anchor=tk.W)
+        ttk.Button(m4, text="Reset to 12.0 mm Baseline Anchor", command=_apply_anatomical).pack(anchor=tk.W)
 
         # Footer close button
         btn_bar = ttk.Frame(wizard, padding=(16, 0, 16, 16))
@@ -2927,6 +3577,38 @@ class PupilTrackingGUI:
             self._load_and_detect_image(str(img_path))
         self._status_var.set(f"Processed {len(images)} images")
 
+    # ================================================================
+    # Synchronous calibration sync — runs BEFORE every detection
+    # to guarantee the detector uses the current GUI settings
+    # (eliminates race with the 180 ms debounce in
+    # _schedule_live_settings_apply).
+    # ================================================================
+
+    def _sync_calibration_to_detector(self) -> None:
+        """Push current GUI calibration settings into the detector immediately.
+
+        Called synchronously before every detection so that the detector
+        always reflects the user's latest calibration choice, even when
+        the 180 ms debounced ``_apply_live_settings`` has not fired yet.
+        """
+        if self._detector is None:
+            return
+        cal_mode = self._calibration_mode_var.get()
+        manual_px = float(self._fixed_scale_var.get())
+        corneal_mm = float(self._corneal_ref_mm_var.get())
+        ring_mm = float(self._ring_ref_mm_var.get())
+        if hasattr(self.cfg, "calibration"):
+            self.cfg.calibration.mode = cal_mode
+            self.cfg.calibration.manual_px_per_mm = manual_px
+            self.cfg.calibration.corneal_diameter_mm = corneal_mm
+            self.cfg.calibration.suction_ring_diameter_mm = ring_mm
+        self._detector.set_calibration_mode(
+            mode=cal_mode,
+            manual_px_per_mm=manual_px,
+            corneal_diameter_mm=corneal_mm,
+            ring_diameter_mm=ring_mm,
+        )
+
     def _load_and_detect_image(self, path: str) -> None:
         image = cv2.imread(path)
         if image is None:
@@ -2939,6 +3621,7 @@ class PupilTrackingGUI:
             self._current_result = None
             self._refresh_display()
             return
+        self._sync_calibration_to_detector()
         self._status_var.set(f"Detecting: {Path(path).name}…")
         self.root.update()
         result = self._detector.detect(
@@ -2972,6 +3655,26 @@ class PupilTrackingGUI:
         self._stop_video()
         self._start_video(path)
 
+    def _arm_detection_gate(
+        self, first_frame: np.ndarray, start_callable: Any, label: str
+    ) -> None:
+        """Show the first frame and hold detection until an ROI is confirmed.
+
+        Detection does not begin until the user confirms an ROI; at that point
+        ``start_callable`` is invoked to spin up the processing thread.
+        """
+        self._current_image = first_frame
+        self._awaiting_roi = True
+        self._pending_detection_start = start_callable
+        self._pause_btn.config(state=tk.DISABLED, text="⏸ Pause")
+        self._progress_label_var.set("Waiting for ROI")
+        self._refresh_display()
+        # Auto-enter ROI drawing so the circle is immediately draggable.
+        self._begin_roi_selection()
+        self._status_var.set(
+            f"{label} loaded — drag the ROI and press Enter to start detection"
+        )
+
     def _start_video(self, source: Any) -> None:
         cap = cv2.VideoCapture(source)
         if not cap.isOpened():
@@ -3000,16 +3703,33 @@ class PupilTrackingGUI:
         self._progress_bar["value"] = 0
         self._progress_label_var.set("Starting…")
         self._eta_label_var.set("")
-        self._pause_btn.config(state=tk.NORMAL, text="⏸ Pause")
         src_name = "Camera" if isinstance(source, int) else Path(str(source)).name
         use_opt = self._use_optimized_var.get() and _FAST_PIPELINE_AVAILABLE
         engine = self._get_fast_engine() if use_opt else None
         if engine is not None:
-            self._start_video_optimized(engine, src_name)
+            start = lambda: self._start_video_optimized(engine, src_name)
         else:
-            self._start_video_classic(src_name)
+            start = lambda: self._start_video_classic(src_name)
+        # A restart (settings change mid-stream) preserves the already-confirmed
+        # ROI, so resume detection immediately instead of re-prompting.
+        if self._restart_in_progress:
+            start()
+            return
+        # Fresh load: grab the first frame for ROI drawing, then hold detection
+        # until the user confirms an ROI (rewind files so frame 0 is not consumed).
+        ok, first = cap.read()
+        if not ok or first is None:
+            messagebox.showerror("Error", f"No frames to read from: {source}")
+            self._stop_video()
+            return
+        if not self._camera_mode:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        self._arm_detection_gate(first, start, src_name)
 
     def _start_video_classic(self, src_name: str) -> None:
+        # Reset the ETA/FPS clock now that processing actually begins — the
+        # time spent drawing the ROI must not count against the frame rate.
+        self._video_start_time = time.monotonic()
         self._status_var.set(f"Playing (classic): {src_name}")
         self._pipeline_var.set("Classic")
         self._video_thread = threading.Thread(
@@ -3026,7 +3746,7 @@ class PupilTrackingGUI:
         max_read_failures = 10  # tolerate transient camera glitches
         while self._video_running and self._video_cap is not None:
             stride = max(1, self._stride_var.get())
-            if self._video_paused:
+            if self._video_paused or self._awaiting_roi:
                 time.sleep(0.05)
                 continue
             ret, frame = self._video_cap.read()
@@ -3065,23 +3785,20 @@ class PupilTrackingGUI:
                 self.root.after(0, self._update_progress, raw_frame_idx, True)
                 continue
             manual_crop = self._get_manual_roi_crop(frame)
-            if manual_crop is not None:
-                crop, roi_x, roi_y = manual_crop
-                result = self._detector.detect_video_frame(
-                    crop,
-                    frame_number=self._frame_count,
-                    roi_x=roi_x,
-                    roi_y=roi_y,
-                )
-                result = self._apply_manual_ring_policy(result)
-                result.metadata.source = source_name
-            else:
-                result = self._detector.detect(
-                    frame,
-                    frame_number=self._frame_count,
-                    source=source_name,
-                )
-                result = self._apply_manual_ring_policy(result)
+            if manual_crop is None:
+                self._current_result = None
+                self.root.after(0, self._update_progress, raw_frame_idx, True)
+                continue
+            crop, roi_x, roi_y = manual_crop
+            self._sync_calibration_to_detector()
+            result = self._detector.detect_video_frame(
+                crop,
+                frame_number=self._frame_count,
+                roi_x=roi_x,
+                roi_y=roi_y,
+            )
+            result = self._apply_manual_ring_policy(result)
+            result.metadata.source = source_name
             if self._tracker is not None:
                 smoothed = self._tracker.update(result)
             else:
@@ -3197,6 +3914,9 @@ class PupilTrackingGUI:
         preset_label = self._performance_preset_var.get().replace("_", " ").title()
         self._status_var.set(f"Playing (optimised): {src_name}")
         self._pipeline_var.set(f"Optimised [{preset_label}]")
+        # Reset the ETA/FPS clock now that processing actually begins — the ROI
+        # drawing wait and one-time engine warmup must not skew the frame rate.
+        self._video_start_time = time.monotonic()
         self._video_thread = threading.Thread(
             target=self._video_loop_optimized,
             args=(src_name,),
@@ -3221,12 +3941,17 @@ class PupilTrackingGUI:
             )
             from pupil_tracking.video.optimized_processor import _FrameReader
 
-            reader = _FrameReader(self._video_cap, frame_queue, stride=stride)
+            reader = _FrameReader(
+                self._video_cap,
+                frame_queue,
+                stride=stride,
+                pause_predicate=lambda: self._video_paused or self._awaiting_roi,
+            )
             reader.start()
 
             try:
                 while self._video_running:
-                    if self._video_paused:
+                    if self._video_paused or self._awaiting_roi:
                         time.sleep(0.05)
                         continue
                     try:
@@ -3340,7 +4065,7 @@ class PupilTrackingGUI:
         # Fallback: synchronous read (camera via _start_video path)
         while self._video_running and self._video_cap is not None:
             stride = max(1, self._stride_var.get())
-            if self._video_paused:
+            if self._video_paused or self._awaiting_roi:
                 time.sleep(0.05)
                 continue
             ret, frame = self._video_cap.read()
@@ -3537,6 +4262,23 @@ class PupilTrackingGUI:
             self._start_video(0)
             return
         self._using_optimized_camera = True
+        # Grab a preview frame so the operator can place the ROI before any
+        # detection runs. The AsyncCapture is already streaming, so poll it
+        # briefly for the first decoded frame.
+        first = None
+        for _ in range(40):
+            data = self._async_capture.read(timeout=0.05)
+            if data is not None:
+                first = data[1]
+                break
+        if first is None:
+            messagebox.showerror("Camera Error", "No frames received from camera")
+            self._stop_video()
+            return
+        self._arm_detection_gate(first, self._launch_camera_optimized, "Camera")
+
+    def _launch_camera_optimized(self) -> None:
+        self._using_optimized_camera = True
         self._video_running = True
         self._video_paused = False
         self._frame_count = 0
@@ -3561,7 +4303,7 @@ class PupilTrackingGUI:
         current_fps = 0.0
 
         while self._video_running and self._async_capture is not None:
-            if self._video_paused:
+            if self._video_paused or self._awaiting_roi:
                 time.sleep(0.05)
                 continue
 
@@ -3757,11 +4499,173 @@ class PupilTrackingGUI:
             eye_result.metadata.image_height = H
             eye_result.metadata.frame_number = getattr(fr, "frame_number", 0)
             eye_result.metadata.latency_ms = getattr(fr, "latency_ms", fr.processing_ms)
+            # ── Override detector-internal calibration with GUI mode ──
+            # The internal UnifiedDetector's StabilizedCalibrator is stuck
+            # on ANATOMICAL_ANCHOR (never receives set_calibration_mode).
+            # Build the correct calibration from the GUI dropdown, then
+            # re-compute pre-computed mm attributes so to_dict() / CSV
+            # export reflect the user's selection.
+            _cal_mode = self._calibration_mode_var.get() if hasattr(self, "_calibration_mode_var") else "ANATOMICAL_ANCHOR"
+            _corneal_mm = float(self._corneal_ref_mm_var.get() if hasattr(self, "_corneal_ref_mm_var") else _CORNEAL_DIAMETER_MM)
+            _fixed_scale = float(self._fixed_scale_var.get() if hasattr(self, "_fixed_scale_var") else 58.2)
+            _ring_ref_mm = float(self._ring_ref_mm_var.get() if hasattr(self, "_ring_ref_mm_var") else 9.4)
+            if _cal_mode in ("FIXED_PIXEL_SCALE", "fixed_manual", "manual"):
+                _px = max(0.1, _fixed_scale)
+                new_cal = CalibrationInfo(
+                    calibrated=True,
+                    px_per_mm=_px,
+                    mm_per_px=1.0 / _px,
+                    source="fixed_manual",
+                    method="fixed_manual",
+                    reference_diameter_mm=0.0,
+                    reference_diameter_px=0.0,
+                    confidence=1.0,
+                    corneal_diameter_assumed_mm=None,
+                )
+            elif _cal_mode == "RING_REFLECTION":
+                _ring_r = getattr(fr, "ring_radius", None)
+                if _ring_r is not None and _ring_r > 10:
+                    _dia = _ring_r * 2.0
+                    _px = _dia / _ring_ref_mm
+                    new_cal = CalibrationInfo(
+                        calibrated=True,
+                        px_per_mm=_px,
+                        mm_per_px=1.0 / _px,
+                        source=f"ring_reflection_{_ring_ref_mm:.1f}mm",
+                        method="ring_reflection",
+                        reference_diameter_mm=_ring_ref_mm,
+                        reference_diameter_px=_dia,
+                        confidence=0.95,
+                        corneal_diameter_assumed_mm=None,
+                    )
+                elif (
+                    getattr(eye_result, "limbus", None) is not None
+                    and getattr(eye_result.limbus, "detected", False)
+                    and getattr(eye_result.limbus, "ellipse", None) is not None
+                ):
+                    _lsm = eye_result.limbus.ellipse.semi_major * 2.0
+                    _px = _lsm / _corneal_mm if _corneal_mm > 0 else 0.0
+                    new_cal = CalibrationInfo(
+                        calibrated=True,
+                        px_per_mm=_px,
+                        mm_per_px=1.0 / _px if _px > 0 else 0.0,
+                        source="limbus_semi_major (fallback)",
+                        method="anatomical",
+                        reference_diameter_mm=_corneal_mm,
+                        reference_diameter_px=_lsm,
+                        confidence=0.85,
+                        corneal_diameter_assumed_mm=_corneal_mm,
+                    )
+                else:
+                    new_cal = CalibrationInfo(
+                        calibrated=False,
+                        px_per_mm=0.0,
+                        mm_per_px=0.0,
+                        source="none",
+                        method="ring_reflection",
+                        reference_diameter_mm=0.0,
+                        reference_diameter_px=0.0,
+                        confidence=0.0,
+                        corneal_diameter_assumed_mm=None,
+                    )
+            else:
+                # ANATOMICAL_ANCHOR
+                if (
+                    getattr(eye_result, "limbus", None) is not None
+                    and getattr(eye_result.limbus, "detected", False)
+                    and getattr(eye_result.limbus, "ellipse", None) is not None
+                ):
+                    _lsm = eye_result.limbus.ellipse.semi_major * 2.0
+                    _px = _lsm / _corneal_mm if _corneal_mm > 0 else 0.0
+                    new_cal = CalibrationInfo(
+                        calibrated=True,
+                        px_per_mm=_px,
+                        mm_per_px=1.0 / _px if _px > 0 else 0.0,
+                        source="limbus_semi_major (optimised)",
+                        method="anatomical",
+                        reference_diameter_mm=_corneal_mm,
+                        reference_diameter_px=_lsm,
+                        confidence=min(0.95, getattr(eye_result, "overall_confidence", 0.0) + 0.05),
+                        corneal_diameter_assumed_mm=_corneal_mm,
+                    )
+                else:
+                    new_cal = CalibrationInfo(
+                        calibrated=False,
+                        px_per_mm=0.0,
+                        mm_per_px=0.0,
+                        source="none",
+                        method="anatomical",
+                        reference_diameter_mm=0.0,
+                        reference_diameter_px=0.0,
+                        confidence=0.0,
+                        corneal_diameter_assumed_mm=_corneal_mm,
+                    )
+            eye_result.calibration = new_cal
+            # Clear stale pre-computed mm attributes set by
+            # _add_mm_values / evaluate_clinical_wtw during the
+            # original detection with the wrong calibration.
+            for target in (
+                getattr(eye_result, "limbus", None),
+                getattr(eye_result, "pupil", None),
+            ):
+                if target is None:
+                    continue
+                for attr in (
+                    "wtw_horizontal_mm",
+                    "wtw_vertical_mm",
+                    "wtw_mean_mm",
+                    "wtw_astigmatism_mm",
+                    "is_wtw_measured",
+                    "wtw_validity_status",
+                    "radius_mm",
+                    "center_mm",
+                ):
+                    if hasattr(target, attr):
+                        try:
+                            setattr(target, attr, None)
+                        except Exception:
+                            pass
+            # Re-compute mm values with the correct calibration
+            if new_cal.calibrated:
+                if (
+                    getattr(eye_result, "pupil", None) is not None
+                    and eye_result.pupil.detected
+                    and eye_result.pupil.ellipse is not None
+                ):
+                    pe = eye_result.pupil.ellipse
+                    eye_result.pupil.radius_mm = pe.radius * new_cal.mm_per_px
+                    eye_result.pupil.center_mm = (
+                        pe.center_x * new_cal.mm_per_px,
+                        pe.center_y * new_cal.mm_per_px,
+                    )
+                if (
+                    getattr(eye_result, "limbus", None) is not None
+                    and eye_result.limbus.detected
+                    and eye_result.limbus.ellipse is not None
+                ):
+                    le = eye_result.limbus.ellipse
+                    eye_result.limbus.radius_mm = le.radius * new_cal.mm_per_px
+                    eye_result.limbus.center_mm = (
+                        le.center_x * new_cal.mm_per_px,
+                        le.center_y * new_cal.mm_per_px,
+                    )
+                    from pupil_tracking.calibration.spatial_calibration import (
+                        evaluate_clinical_wtw,
+                    )
+                    h, v, m, astig, is_m, status = evaluate_clinical_wtw(
+                        eye_result.limbus, new_cal,
+                    )
+                    eye_result.limbus.wtw_horizontal_mm = h
+                    eye_result.limbus.wtw_vertical_mm = v
+                    eye_result.limbus.wtw_mean_mm = m
+                    eye_result.limbus.wtw_astigmatism_mm = astig
+                    eye_result.limbus.is_wtw_measured = is_m
+                    eye_result.limbus.wtw_validity_status = status
             return eye_result
 
         cal_mode = self._calibration_mode_var.get() if hasattr(self, "_calibration_mode_var") else "ANATOMICAL_ANCHOR"
         corneal_mm = float(self._corneal_ref_mm_var.get() if hasattr(self, "_corneal_ref_mm_var") else _CORNEAL_DIAMETER_MM)
-        fixed_scale = float(self._fixed_scale_var.get() if hasattr(self, "_fixed_scale_var") else 44.5)
+        fixed_scale = float(self._fixed_scale_var.get() if hasattr(self, "_fixed_scale_var") else 58.2)
         ring_ref_mm = float(self._ring_ref_mm_var.get() if hasattr(self, "_ring_ref_mm_var") else 9.4)
 
         if cal_mode in ("FIXED_PIXEL_SCALE", "fixed_manual", "manual"):
@@ -4102,7 +5006,10 @@ class PupilTrackingGUI:
                     "semi_major": semi_a,
                     "semi_minor": semi_b,
                     "angle_deg": float(getattr(fr, "limbus_angle", 0.0) or 0.0),
-                    "diameter_mm": (major_diameter_px * mm) if cal.calibrated else None,
+                    # In anatomical mode, mean_r*2*mm ≡ wtw_m (algebraically
+                    # identical).  Use wtw_m explicitly so the CSV semantically
+                    # agrees with the WTW card rather than re-deriving from px.
+                    "diameter_mm": wtw_m if (cal.calibrated and wtw_m is not None) else ((mean_r * 2.0 * mm) if cal.calibrated else None),
                     "semi_major_mm": (semi_a * mm) if cal.calibrated else None,
                     "semi_minor_mm": (semi_b * mm) if cal.calibrated else None,
                 },
@@ -4173,9 +5080,12 @@ class PupilTrackingGUI:
         self._roi_drag_offset = (0.0, 0.0)
         self._roi_original_before_edit = None
         self._roi_preview = None
+        # Clear any pending ROI-gated detection start.
+        self._awaiting_roi = False
+        self._pending_detection_start = None
         self._canvas.configure(cursor="crosshair")
         if hasattr(self, "_roi_btn"):
-            self._roi_btn.config(text="Set ROI")
+            self._roi_btn.config(text="ROI")
         if self._video_thread is not None:
             try:
                 if threading.current_thread() is not self._video_thread:
@@ -4330,24 +5240,6 @@ class PupilTrackingGUI:
             font=("Consolas", 9),
             anchor="center",
         )
-
-    def _show_image(self, image_bgr: np.ndarray) -> None:
-        canvas_w = self._canvas.winfo_width()
-        canvas_h = self._canvas.winfo_height()
-        if canvas_w < 10 or canvas_h < 10:
-            return
-        h, w = image_bgr.shape[:2]
-        scale = min(canvas_w / w, canvas_h / h, 1.0)
-        new_w = max(1, int(w * scale))
-        new_h = max(1, int(h * scale))
-        resized = cv2.resize(image_bgr, (new_w, new_h))
-        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-        pil_img = Image.fromarray(rgb)
-        self._display_image = ImageTk.PhotoImage(pil_img)
-        self._canvas.delete("all")
-        x = (canvas_w - new_w) // 2
-        y = (canvas_h - new_h) // 2
-        self._canvas.create_image(x, y, anchor=tk.NW, image=self._display_image)
 
     def _show_image_fast(
         self,
@@ -4714,29 +5606,9 @@ class PupilTrackingGUI:
 
         self._draw_cross_section(out, result, scale)
 
-        quality = (
-            result.overall_quality.value
-            if hasattr(result.overall_quality, "value")
-            else str(result.overall_quality)
-        )
-        color_map = {
-            "SURGICAL": (0, 230, 118),
-            "CLINICAL": (246, 182, 41),
-            "RESEARCH": (38, 167, 255),
-            "INSUFFICIENT": (80, 83, 239),
-            "NO_DETECTION": (97, 97, 97),
-        }
-        badge_color = color_map.get(quality, (128, 128, 128))
-        font_scale_q = max(0.4, 0.7 * scale)
-        cv2.putText(
-            out,
-            f"{quality} ({result.overall_confidence:.2f})",
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            font_scale_q,
-            badge_color,
-            2,
-        )
+        # (Removed) On-image quality badge text (e.g. "SURGICAL (0.94)") that
+        # was drawn top-left on the video.  The quality/confidence is still
+        # shown in the ribbon badge and the measurements panel.
         font_scale_t = max(0.3, 0.5 * scale)
         cv2.putText(
             out,
@@ -4747,29 +5619,9 @@ class PupilTrackingGUI:
             (180, 180, 180),
             1,
         )
-        if self._last_opt_stats.get("overload_active"):
-            label = "OVERLOAD PROTECTION"
-            org = (10, 58)
-            cv2.putText(
-                out,
-                label,
-                org,
-                cv2.FONT_HERSHEY_SIMPLEX,
-                max(0.35, 0.55 * scale),
-                (20, 20, 20),
-                3,
-                cv2.LINE_AA,
-            )
-            cv2.putText(
-                out,
-                label,
-                org,
-                cv2.FONT_HERSHEY_SIMPLEX,
-                max(0.35, 0.55 * scale),
-                (0, 215, 255),
-                1,
-                cv2.LINE_AA,
-            )
+        # (Removed) On-image "OVERLOAD PROTECTION" overlay that blinked
+        # top-left while adaptive overload protection was active.  Overload
+        # protection itself still runs; only the on-video text was removed.
 
         # ══════════════════════════════════════════════════════════
         # GRAYSCALE GUI 12 of 12 — Grayscale mode badge on image
@@ -4777,8 +5629,6 @@ class PupilTrackingGUI:
         # (Removed) Grayscale mode badge text overlay (top-right).
         # Grayscale processing (OFF/AUTO/FORCE) and overlays remain active; 
         # only the on-image text label was removed to reduce clutter.
-        mode = self._grayscale_mode_var.get()
-        _ = mode  # keep reference to avoid unused variable warnings
         # ══════════════════════════════════════════════════════════
 
         font_scale_a = max(0.25, 0.4 * scale)
@@ -5064,204 +5914,6 @@ class PupilTrackingGUI:
             cv2.ellipse(out, ct, axes, angle, 0, 360, color, thickness, cv2.LINE_AA)
         return ct
 
-    def _draw_overlay(self, image: np.ndarray, result: Any) -> np.ndarray:
-        out = image.copy()
-        h, w = out.shape[:2]
-        cal = result.calibration
-
-        if (
-            self._show_pupil.get()
-            and result.pupil.detected
-            and result.pupil.ellipse is not None
-        ):
-            e = result.pupil.ellipse
-            pupil_color = (0, 255, 0)
-            ct = self._draw_structure(out, e, pupil_color)
-            if self._show_centers.get():
-                cv2.circle(out, ct, 4, pupil_color, -1)
-            if self._show_measurements.get():
-                dia_px = e.radius * 2.0
-                label = f"D={dia_px:.0f}px"
-                if cal.calibrated:
-                    label += f" ({dia_px * cal.mm_per_px:.2f}mm)"
-                ft = getattr(e, "fit_type", None) or getattr(
-                    result.pupil, "fit_type", None
-                )
-                if ft:
-                    label += f" [{ft}]"
-                cv2.putText(
-                    out,
-                    label,
-                    (ct[0] + 10, ct[1] - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.45,
-                    pupil_color,
-                    1,
-                    cv2.LINE_AA,
-                )
-
-        if (
-            self._show_limbus.get()
-            and result.limbus.detected
-            and result.limbus.ellipse is not None
-        ):
-            e = result.limbus.ellipse
-            limbus_color = (255, 100, 0)
-            ct = self._draw_structure(out, e, limbus_color)
-            if self._show_centers.get():
-                cv2.circle(out, ct, 4, limbus_color, -1)
-            if self._show_measurements.get():
-                dia_px = e.radius * 2.0
-                label = f"D={dia_px:.0f}px"
-                if cal.calibrated:
-                    dia_mm = dia_px * cal.mm_per_px
-                    smaj_mm = e.semi_major * cal.mm_per_px
-                    smin_mm = e.semi_minor * cal.mm_per_px
-                    label += f" ({dia_mm:.2f}mm  {smaj_mm:.2f}x{smin_mm:.2f})"
-                ft = getattr(e, "fit_type", None) or getattr(
-                    result.limbus, "fit_type", None
-                )
-                if ft:
-                    label += f" [{ft}]"
-                cv2.putText(
-                    out,
-                    label,
-                    (ct[0] + 10, ct[1] + 20),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.45,
-                    limbus_color,
-                    1,
-                    cv2.LINE_AA,
-                )
-
-        ring_status = getattr(result, "ring_status", "unknown")
-        if ring_status == "ring_present":
-            ring_center = getattr(result, "ring_center", None)
-            ring_radius = getattr(result, "ring_radius", None)
-            ring_contour = getattr(result, "ring_contour", None)
-            if ring_center is not None and ring_radius is not None:
-                cx = (int(round(ring_center[0])))
-                cy = (int(round(ring_center[1])))
-                rr = int(round(ring_radius))
-                if ring_contour is not None and len(ring_contour) >= 5:
-                    cv2.drawContours(out, [ring_contour.astype(np.int32)], -1, (0, 0, 255), 2)
-                else:
-                    cv2.circle(out, (cx, cy), rr, (0, 0, 255), 2, cv2.LINE_AA)
-                if self._show_ring_center.get():
-                    _base = max(4, int(10))
-                    _ring_cross_size = int(max(12, min(_base, 26)))
-                    cv2.drawMarker(
-                        out,
-                        (cx, cy),
-                        (255, 255, 255),
-                        cv2.MARKER_CROSS,
-                        _ring_cross_size,
-                        2,
-                        cv2.LINE_AA,
-                    )
-                if self._show_measurements.get():
-                    label = f"R={ring_radius * 2.0:.0f}px"
-                    if cal.calibrated:
-                        label += f" ({ring_radius * 2.0 * cal.mm_per_px:.2f}mm)"
-                    cv2.putText(
-                        out,
-                        label,
-                        (cx + 10, cy - 18),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.45,
-                        (0, 0, 255),
-                        1,
-                        cv2.LINE_AA,
-                    )
-
-        if self._show_offset.get() and result.has_both:
-            p = result.pupil.ellipse
-            p_pt = (int(round(p.center_x)), int(round(p.center_y)))
-            cc = getattr(result, "corneal_center", None)
-            if cc is not None and getattr(cc, "valid", False) and getattr(cc, "center_px", None):
-                ref_pt = (
-                    int(round(cc.center_px[0])),
-                    int(round(cc.center_px[1])),
-                )
-                dx = p.center_x - cc.center_px[0]
-                dy = p.center_y - cc.center_px[1]
-            else:
-                l = result.limbus.ellipse
-                ref_pt = (int(round(l.center_x)), int(round(l.center_y)))
-                dx = p.center_x - l.center_x
-                dy = p.center_y - l.center_y
-            cv2.line(out, p_pt, ref_pt, (0, 255, 255), 2, cv2.LINE_AA)
-            if self._show_centers.get():
-                cv2.drawMarker(out, ref_pt, (10, 10, 10), cv2.MARKER_CROSS, 20, 2, cv2.LINE_AA)
-                cv2.drawMarker(out, ref_pt, (255, 0, 255), cv2.MARKER_CROSS, 20, 2, cv2.LINE_AA)
-            if self._show_measurements.get():
-                offset_px = math.hypot(dx, dy)
-                mid = ((p_pt[0] + ref_pt[0]) // 2, (p_pt[1] + ref_pt[1]) // 2)
-                label = f"{offset_px:.1f}px"
-                if cal.calibrated:
-                    label += f" ({offset_px * cal.mm_per_px:.2f}mm)"
-                cv2.putText(
-                    out,
-                    label,
-                    (mid[0] + 5, mid[1] - 5),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.4,
-                    (0, 255, 255),
-                    1,
-                    cv2.LINE_AA,
-                )
-
-        self._draw_cross_section(out, result, 1.0)
-
-        quality = (
-            result.overall_quality.value
-            if hasattr(result.overall_quality, "value")
-            else str(result.overall_quality)
-        )
-        color_map = {
-            "SURGICAL": (0, 230, 118),
-            "CLINICAL": (246, 182, 41),
-            "RESEARCH": (38, 167, 255),
-            "INSUFFICIENT": (80, 83, 239),
-            "NO_DETECTION": (97, 97, 97),
-        }
-        badge_color = color_map.get(quality, (128, 128, 128))
-        cv2.putText(
-            out,
-            f"{quality} ({result.overall_confidence:.2f})",
-            (10, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            badge_color,
-            2,
-        )
-        cv2.putText(
-            out,
-            f"{result.metadata.processing_time_ms:.0f}ms",
-            (w - 100, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (180, 180, 180),
-            1,
-        )
-
-        # (Hidden) GRAYSCALE GUI 12 of 12 — Grayscale mode badge on image
-        # Removed to avoid showing overlay text when user loads an image.
-
-
-        for i, alert in enumerate(result.alerts[:3]):
-            cv2.putText(
-                out,
-                alert[:80],
-                (10, h - 15 - i * 20),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.4,
-                (0, 100, 255),
-                1,
-            )
-
-        return out
-
     def _on_canvas_resize(self, _event: Any) -> None:
         if self._resize_after_id is not None:
             self.root.after_cancel(self._resize_after_id)
@@ -5449,40 +6101,23 @@ class PupilTrackingGUI:
                 and has_cal
             ):
                 le = limbus_res.ellipse
-                h_wtw = getattr(limbus_res, "wtw_horizontal_mm", None)
-                v_wtw = getattr(limbus_res, "wtw_vertical_mm", None)
-                m_wtw = getattr(limbus_res, "wtw_mean_mm", None)
-                astig = getattr(limbus_res, "wtw_astigmatism_mm", None)
-                is_m = getattr(limbus_res, "is_wtw_measured", False)
-                status = getattr(limbus_res, "wtw_validity_status", "UNAVAILABLE")
-
-                if h_wtw is None:
-                    h_wtw = 2.0 * le.semi_major * mm_per_px
-                    v_wtw = 2.0 * le.semi_minor * mm_per_px
-                    m_wtw = (h_wtw + v_wtw) / 2.0
-                    astig = abs(h_wtw - v_wtw)
-                    is_m = (getattr(cal, "method", "anatomical") != "anatomical")
-                    status = (
-                        "ANCHORED_BASELINE"
-                        if not is_m
-                        else (
-                            "VALID_CLINICAL_RANGE"
-                            if (9.5 <= m_wtw <= 13.5)
-                            else "OUT_OF_BOUNDS_WARNING"
-                        )
-                    )
+                # Always recompute WTW from current pixel geometry and
+                # calibration.  Pre-computed attributes (set by
+                # _add_mm_values during detection) become stale when the
+                # calibration mode changes without a new detection.
+                #
+                # Horizontal WTW = 2 x Limbus Semi-Major (mm)
+                # Vertical   WTW = 2 x Limbus Semi-Minor (mm)
+                # i.e. the full limbus axes in mm — exactly twice the
+                # Semi-Major (mm) / Semi-Minor (mm) rows shown in the Limbus
+                # panel.  Reported as the true measured geometry (no clamping).
+                h_wtw = 2.0 * le.semi_major * mm_per_px
+                v_wtw = 2.0 * le.semi_minor * mm_per_px
+                m_wtw = (h_wtw + v_wtw) / 2.0
 
                 self._wtw_vars["horizontal"].set(f"{h_wtw:.2f} mm")
                 self._wtw_vars["vertical"].set(f"{v_wtw:.2f} mm")
                 self._wtw_vars["mean"].set(f"{m_wtw:.2f} mm")
-                angle_deg = getattr(le, "angle_deg", 0.0) or 0.0
-                self._wtw_vars["astigmatism"].set(f"{astig:.2f} mm @ {angle_deg:.0f}°")
-                self._wtw_vars["status"].set(status.replace("_", " ").title())
-                self._wtw_vars["mode"].set(
-                    "Patient-Specific Measured"
-                    if is_m
-                    else "Anatomical Baseline (11.5mm)"
-                )
             elif hasattr(self, "_wtw_vars"):
                 for var in self._wtw_vars.values():
                     var.set("---")
@@ -5718,15 +6353,16 @@ class PupilTrackingGUI:
     # Export
     # ================================================================
 
-    def _export_csv(self) -> None:
+    def _export_csv(self, path: Optional[str] = None, show_success: bool = True) -> None:
         if not self._results_history:
             messagebox.showinfo("No Data", "No results to export")
             return
-        path = filedialog.asksaveasfilename(
-            title="Export CSV",
-            defaultextension=".csv",
-            filetypes=[("CSV files", "*.csv")],
-        )
+        if path is None:
+            path = filedialog.asksaveasfilename(
+                title="Export CSV",
+                defaultextension=".csv",
+                filetypes=[("CSV files", "*.csv")],
+            )
         if not path:
             return
         def _round(v: Any, nd: int = 4) -> Any:
@@ -5857,30 +6493,34 @@ class PupilTrackingGUI:
             writer = csv.DictWriter(fh, fieldnames=rows[0].keys())
             writer.writeheader()
             writer.writerows(rows)
-        self._status_var.set(f"Exported {len(rows)} rows → {path}")
+        if show_success:
+            self._status_var.set(f"Exported {len(rows)} rows → {path}")
 
-    def _export_json(self) -> None:
+    def _export_txt(self) -> None:
         if not self._results_history:
             messagebox.showinfo("No Data", "No results to export")
             return
         path = filedialog.asksaveasfilename(
-            title="Export JSON",
-            defaultextension=".json",
-            filetypes=[("JSON files", "*.json")],
+            title="Export Results TXT",
+            defaultextension=".txt",
+            filetypes=[("Text files", "*.txt")],
         )
         if not path:
             return
-        export_payload = {
-            "export_info": {
-                "version": "2.3",
-                "total_frames": len(self._results_history),
-                "export_timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "corneal_diameter_assumption_mm": _CORNEAL_DIAMETER_MM,
-            },
-            "results": self._results_history,
-        }
-        with open(path, "w") as fh:
-            json.dump(export_payload, fh, indent=2, default=str)
+        lines = [
+            "# Pupil-Limbus Detection Results",
+            "",
+            "[export_info]",
+            "version=2.3",
+            f"total_frames={len(self._results_history)}",
+            f"export_timestamp={time.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"corneal_diameter_assumption_mm={_CORNEAL_DIAMETER_MM}",
+            "",
+            "[results]",
+        ]
+        for index, result in enumerate(self._results_history, start=1):
+            lines.append(f"frame_{index}={result!s}")
+        Path(path).write_text("\n".join(lines) + "\n", encoding="utf-8")
         self._status_var.set(f"Exported {len(self._results_history)} results → {path}")
 
     def _export_snapshot(self) -> None:

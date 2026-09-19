@@ -50,7 +50,8 @@ class FrameRecorder:
         ("X264", ".mp4", "H.264 (MP4)"),
     ]
 
-    def __init__(self) -> None:
+    def __init__(self, name: str = "main") -> None:
+        self._name = name
         self._writer_thread: Optional[threading.Thread] = None
         self._frame_queue: queue.Queue = queue.Queue(maxsize=60)
         self._writer: Optional[cv2.VideoWriter] = None
@@ -181,7 +182,7 @@ class FrameRecorder:
         self._start_time = time.monotonic()
         self._frame_queue = queue.Queue(maxsize=60)
         self._writer_thread = threading.Thread(
-            target=self._writer_loop, daemon=True, name="FrameRecorderWriter"
+            target=self._writer_loop, daemon=True, name=f"FrameRecorderWriter_{self._name}"
         )
         self._writer_thread.start()
 
