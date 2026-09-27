@@ -541,9 +541,17 @@ class UnifiedDetector:
         if hasattr(result, "_raw_mask") and result._raw_mask is not None:
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
+            # Ensure raw_mask is at the original image resolution
+            raw_mask = result._raw_mask
+            if raw_mask.shape[:2] != gray.shape[:2]:
+                raw_mask = cv2.resize(
+                    raw_mask,
+                    (gray.shape[1], gray.shape[0]),
+                    interpolation=cv2.INTER_NEAREST,
+                )
+
             # Extract ring from 4-class segmentation if available
             ring_seg = None
-            raw_mask = result._raw_mask
             if raw_mask.max() >= 3:
                 ring_seg = extract_ring_from_segmentation(raw_mask)
                 # Cross-reference with ring detector result
@@ -562,7 +570,8 @@ class UnifiedDetector:
                 result, 
                 pupil_fit, 
                 limbus_fit,
-                force_limbus_overwrite=(not is_docked)
+                force_limbus_overwrite=(not is_docked),
+                is_docked=is_docked,
             )
 
         # -- Step 4: Classical fallback --------------------------------
@@ -1480,6 +1489,7 @@ class UnifiedDetector:
         pupil_fit: Optional[FitResult],
         limbus_fit: Optional[FitResult],
         force_limbus_overwrite: bool = False,
+        is_docked: bool = False,
     ) -> None:
         """Overwrite pupil/limbus in *result* with SmartFitter output
         when the new fit is valid and at least as confident."""
@@ -1849,7 +1859,7 @@ class UnifiedDetector:
         return result
 
     # ================================================================
-    # Classical CV fallback — pupil (ring-aware)
+    # Classical CV fallback — pupil (ring-aware, fast CPU optimized)
     # ================================================================
 
     def _classical_pupil(
@@ -1866,7 +1876,12 @@ class UnifiedDetector:
         detection = PupilDetection()
         detection.method = DetectionMethod.CLASSICAL
 
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        if len(image.shape) == 3 and image.shape[2] >= 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        elif len(image.shape) == 2:
+            gray = image
+        else:
+            gray = image[:, :, 0]
         h, w = gray.shape
         img_diag = math.sqrt(h * h + w * w)
 
@@ -1901,11 +1916,16 @@ class UnifiedDetector:
         best_score = 0.0
         best_contour = None
 
-        for pct in [3, 5, 8, 12, 18, 25, 35]:
-            thresh_val = np.percentile(blurred, pct)
+        # Batch percentile computation for maximum speed
+        pct_vals = np.percentile(blurred[::2, ::2], [3, 5, 8, 12, 18, 25])
+        pct_map = dict(zip([3, 5, 8, 12, 18, 25], pct_vals))
+
+        # Regression-guaranteed 6-element threshold sequence
+        for pct in [3, 5, 8, 12, 18, 25]:
+            thresh_val = pct_map[pct]
             _, binary = cv2.threshold(blurred, thresh_val, 255, cv2.THRESH_BINARY_INV)
             kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-            binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
+            binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=1)
             binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
 
             # Apply ring ROI mask
@@ -1913,21 +1933,28 @@ class UnifiedDetector:
                 binary = cv2.bitwise_and(binary, ring_roi_mask)
 
             contours, _ = cv2.findContours(
-                binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+                binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
 
+            # Fast candidate pre-filtering to prevent expensive RANSAC on noise contours
+            candidates = []
             for cnt in contours:
-                area = cv2.contourArea(cnt)
-                if area < min_area or len(cnt) < 15:
+                if len(cnt) < 5:
+                    continue
+                hull = cv2.convexHull(cnt)
+                area = cv2.contourArea(hull)
+                if area < min_area:
                     continue
 
-                cnt_mask = np.zeros_like(gray)
-                cv2.drawContours(cnt_mask, [cnt], -1, 1, -1)
-                fit = self._fitter.fit(cnt_mask, gray)
-
-                if fit is None or not fit.valid:
+                peri = cv2.arcLength(hull, True)
+                if peri <= 0:
                     continue
-                if fit.radius < min_radius or fit.radius > max_radius:
+                circ_geom = 4.0 * math.pi * area / (peri * peri)
+                if circ_geom < 0.30:
+                    continue
+
+                (cx_c, cy_c), r_c = cv2.minEnclosingCircle(hull)
+                if r_c < min_radius or r_c > max_radius:
                     continue
 
                 # Ring containment check
@@ -1937,50 +1964,76 @@ class UnifiedDetector:
                     and ring_result.ring_radius is not None
                 ):
                     if not self._is_inside_ring(
-                        fit.center_x,
-                        fit.center_y,
-                        fit.radius,
+                        cx_c,
+                        cy_c,
+                        r_c,
                         ring_result,
                     ):
                         continue
-
-                # Centrality score
-                if is_docked and ring_result.ring_center is not None:
                     ring_cx, ring_cy = ring_result.ring_center
                     ring_r = ring_result.ring_radius or 1.0
-                    dist = math.sqrt(
-                        (fit.center_x - ring_cx) ** 2 + (fit.center_y - ring_cy) ** 2
-                    )
+                    dist = math.hypot(cx_c - ring_cx, cy_c - ring_cy)
                     centrality = max(0.0, 1.0 - dist / ring_r)
                 else:
                     centrality = max(
                         0.0,
                         1.0
                         - (
-                            abs(fit.center_x - w / 2) / (w / 2) * 0.5
-                            + abs(fit.center_y - h / 2) / (h / 2) * 0.5
+                            abs(cx_c - w / 2) / (w / 2) * 0.5
+                            + abs(cy_c - h / 2) / (h / 2) * 0.5
                         ),
                     )
 
-                circ = fit.semi_minor / fit.semi_major if fit.semi_major > 0 else 0.0
+                bx, by, bw, bh = cv2.boundingRect(hull)
+                mean_val = float(np.mean(gray[by:by + bh, bx:bx + bw]))
+                darkness = 1.0 - (mean_val / 255.0)
+                radius_norm = min(1.0, max(0.2, r_c / max(1.0, img_diag * 0.05)))
 
-                mask_tmp = np.zeros_like(gray)
-                cv2.drawContours(mask_tmp, [cnt], -1, 255, -1)
-                darkness = 1.0 - (cv2.mean(gray, mask=mask_tmp)[0] / 255.0)
+                pre_score = (
+                    0.30 * centrality
+                    + 0.30 * min(1.0, circ_geom / 0.7)
+                    + 0.20 * darkness
+                    + 0.20 * radius_norm
+                )
+                candidates.append((pre_score, cnt, hull, circ_geom, centrality, darkness))
 
+            if not candidates:
+                continue
+
+            # Sort and evaluate only the top candidate(s)
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            for pre_score, cnt, hull, circ_geom, centrality, darkness in candidates[:2]:
+                cnt_mask = np.zeros_like(gray)
+                cv2.drawContours(cnt_mask, [hull], -1, 1, -1)
+                fit = self._fitter.fit(cnt_mask, gray)
+
+                if fit is None or not fit.valid:
+                    continue
+                if fit.radius < min_radius or fit.radius > max_radius:
+                    continue
+
+                circ = fit.semi_minor / fit.semi_major if fit.semi_major > 0 else circ_geom
                 fit_quality = fit.fit_quality if fit.fit_quality is not None else 0.5
+                radius_norm = min(1.0, max(0.2, fit.radius / max(1.0, img_diag * 0.05)))
 
                 score = (
                     0.25 * centrality
                     + 0.25 * min(1.0, circ / 0.7)
                     + 0.25 * fit_quality
-                    + 0.25 * darkness
+                    + 0.15 * darkness
+                    + 0.10 * radius_norm
                 )
 
                 if score > best_score:
                     best_score = score
                     best_fit = fit
                     best_contour = cnt
+                # Top valid candidate evaluated successfully
+                break
+
+            # Early break when high-confidence pupil candidate with realistic radius is verified
+            if best_score > 0.75 and best_fit is not None and best_fit.radius >= min_radius * 1.5:
+                break
 
         if best_fit is not None and best_score > 0.20:
             detection.detected = True
@@ -1993,7 +2046,7 @@ class UnifiedDetector:
         return detection
 
     # ================================================================
-    # Classical CV fallback — limbus (ring-aware)
+    # Classical CV fallback — limbus (ring-aware, fast CPU optimized)
     # ================================================================
 
     def _classical_limbus(
@@ -2003,7 +2056,7 @@ class UnifiedDetector:
         ring_result: Optional[RingDetectionResult] = None,
     ) -> LimbusDetection:
         """Classical limbus detection using gradient edges + Hough,
-        refined by SmartContourFitter.
+        refined by SmartContourFitter with vectorized edge sampling.
 
         When a ring is detected, the search radius is constrained
         so the limbus cannot extend outside the ring opening.
@@ -2011,16 +2064,36 @@ class UnifiedDetector:
         detection = LimbusDetection()
         detection.method = DetectionMethod.CLASSICAL
 
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        if len(image.shape) == 3 and image.shape[2] >= 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        elif len(image.shape) == 2:
+            gray = image
+        else:
+            gray = image[:, :, 0]
         h, w = gray.shape
         img_diag = math.sqrt(h * h + w * w)
 
         min_radius = max(20, int(img_diag * 0.06))
         max_radius = int(img_diag * 0.45)
 
-        if pupil_hint is not None and pupil_hint.is_valid:
-            expected_min = pupil_hint.radius * 1.8
-            expected_max = pupil_hint.radius * 5.0
+        # Normalize pupil hint whether it is FitResult or PupilDetection
+        p_valid = False
+        p_cx, p_cy, p_r = 0.0, 0.0, 0.0
+        if pupil_hint is not None:
+            if getattr(pupil_hint, "valid", False):
+                p_valid = True
+                p_cx = float(pupil_hint.center_x)
+                p_cy = float(pupil_hint.center_y)
+                p_r = float(pupil_hint.radius)
+            elif getattr(pupil_hint, "detected", False) and getattr(pupil_hint, "ellipse", None) is not None:
+                p_valid = True
+                p_cx = float(pupil_hint.ellipse.center_x)
+                p_cy = float(pupil_hint.ellipse.center_y)
+                p_r = float(pupil_hint.ellipse.radius)
+
+        if p_valid:
+            expected_min = p_r * 1.8
+            expected_max = p_r * 5.0
             min_radius = max(min_radius, int(expected_min * 0.8))
             max_radius = min(max_radius, int(expected_max * 1.2))
 
@@ -2071,18 +2144,18 @@ class UnifiedDetector:
         if not all_circles:
             return detection
 
-        best_fit: Optional[FitResult] = None
-        best_score = 0.0
-
+        # Pre-filter candidate circles by pupil and ring geometry
+        candidate_circles = []
         for cx, cy, r in all_circles:
             if r < min_radius or r > max_radius:
                 continue
 
-            if pupil_hint is not None and pupil_hint.is_valid:
-                d = math.sqrt(
-                    (cx - pupil_hint.center_x) ** 2 + (cy - pupil_hint.center_y) ** 2
-                )
+            if p_valid:
+                d = math.hypot(cx - p_cx, cy - p_cy)
                 if d > r * 0.35:
+                    continue
+                radius_ratio = r / max(p_r, 1.0)
+                if radius_ratio < 1.6 or radius_ratio > 5.5:
                     continue
 
             # Ring containment check
@@ -2093,29 +2166,59 @@ class UnifiedDetector:
             ):
                 ring_cx, ring_cy = ring_result.ring_center
                 ring_r = ring_result.ring_radius
-                dist_to_ring = math.sqrt((cx - ring_cx) ** 2 + (cy - ring_cy) ** 2)
+                dist_to_ring = math.hypot(cx - ring_cx, cy - ring_cy)
                 if dist_to_ring + r > ring_r * 1.05:
                     continue
 
-            edge_pts: list[list[int]] = []
-            for angle in np.linspace(0, 2 * np.pi, 360):
-                for dr in range(-12, 13):
-                    px = int(cx + (r + dr) * math.cos(angle))
-                    py = int(cy + (r + dr) * math.sin(angle))
-                    if 0 <= px < w and 0 <= py < h and edges[py, px] > 0:
-                        edge_pts.append([px, py])
-                        break
+            # Priority pre-ranking: circles closer to pupil or image center
+            if p_valid:
+                priority = -math.hypot(cx - p_cx, cy - p_cy)
+            else:
+                priority = -(abs(cx - w / 2) + abs(cy - h / 2))
+            candidate_circles.append((priority, cx, cy, r))
 
-            if len(edge_pts) < 20:
+        if not candidate_circles:
+            return detection
+
+        # Sort and evaluate at most top 3 candidate circles
+        candidate_circles.sort(key=lambda x: x[0], reverse=True)
+        top_candidates = candidate_circles[:3]
+
+        best_fit: Optional[FitResult] = None
+        best_score = 0.0
+
+        # Vectorized radial edge search (72 rays at 5° increments, 21 radial offsets)
+        angles = np.linspace(0, 2 * np.pi, 72, endpoint=False)
+        cos_a = np.cos(angles)
+        sin_a = np.sin(angles)
+        dr_vals = np.arange(-10, 11)  # 21 radial steps around candidate circle
+
+        for _, cx, cy, r in top_candidates:
+            # Shape: (len(dr_vals), 72)
+            r_mat = r + dr_vals[:, None]
+            px_mat = np.clip(np.round(cx + r_mat * cos_a[None, :]).astype(np.int32), 0, w - 1)
+            py_mat = np.clip(np.round(cy + r_mat * sin_a[None, :]).astype(np.int32), 0, h - 1)
+
+            # Instantaneous vectorized edge lookup
+            edge_hits = edges[py_mat, px_mat] > 0  # (21, 72)
+            ray_has_hit = np.any(edge_hits, axis=0)  # (72,)
+
+            if np.sum(ray_has_hit) < 15:
                 continue
 
-            edge_mask = np.zeros_like(gray)
-            pts_arr = np.array(edge_pts, dtype=np.int32)
-            if len(pts_arr) >= 5:
-                hull = cv2.convexHull(pts_arr)
-                cv2.fillConvexPoly(edge_mask, hull, 1)
+            first_hit_idx = np.argmax(edge_hits, axis=0)  # (72,)
+            valid_ray_indices = np.where(ray_has_hit)[0]
 
-            fit = self._fitter.fit(edge_mask, gray)
+            edge_pts = [
+                [int(px_mat[first_hit_idx[i], i]), int(py_mat[first_hit_idx[i], i])]
+                for i in valid_ray_indices
+            ]
+
+            pts_arr = np.array(edge_pts, dtype=np.float64)
+            if len(pts_arr) < 12:
+                continue
+
+            fit = self._fitter.fit_contour(pts_arr)
             if fit is None or not fit.valid:
                 continue
             if fit.radius < min_radius or fit.radius > max_radius:
@@ -2130,7 +2233,7 @@ class UnifiedDetector:
                     + abs(fit.center_y - h / 2) / (h / 2) * 0.5
                 ),
             )
-            coverage = min(1.0, len(edge_pts) / 180.0)
+            coverage = min(1.0, len(edge_pts) / 60.0)
             fit_quality = fit.fit_quality if fit.fit_quality is not None else 0.5
 
             score = (
@@ -2140,20 +2243,15 @@ class UnifiedDetector:
                 + 0.25 * coverage
             )
 
-            if pupil_hint is not None and pupil_hint.is_valid:
-                d = math.sqrt(
-                    (fit.center_x - pupil_hint.center_x) ** 2
-                    + (fit.center_y - pupil_hint.center_y) ** 2
-                )
+            if p_valid:
+                d = math.hypot(fit.center_x - p_cx, fit.center_y - p_cy)
                 concentricity = max(0.0, 1.0 - d / max(r, 1))
                 score = score * 0.7 + concentricity * 0.3
 
             # Bonus for concentricity with ring centre
             if is_docked and ring_result.ring_center is not None:
                 ring_cx, ring_cy = ring_result.ring_center
-                d_ring = math.sqrt(
-                    (fit.center_x - ring_cx) ** 2 + (fit.center_y - ring_cy) ** 2
-                )
+                d_ring = math.hypot(fit.center_x - ring_cx, fit.center_y - ring_cy)
                 ring_concentricity = max(
                     0.0, 1.0 - d_ring / max(ring_result.ring_radius or 1, 1)
                 )

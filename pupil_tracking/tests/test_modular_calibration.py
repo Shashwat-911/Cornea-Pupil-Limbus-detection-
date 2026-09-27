@@ -561,7 +561,7 @@ def test_F_set_mode_updates_stabilized_calibrator():
     cal = StabilizedCalibrator(
         config=cfg.measurement_stabilization,
         corneal_diameter_mm=12.0,
-        mode=getattr(cfg.calibration, "mode", "ANATOMICAL_ANCHOR"),
+        mode="ANATOMICAL_ANCHOR",
         manual_px_per_mm=getattr(cfg.calibration, "manual_px_per_mm", None),
         ring_diameter_mm=getattr(cfg.calibration, "suction_ring_diameter_mm", 9.4),
     )
@@ -603,7 +603,8 @@ def test_G_switching_modes_on_shared_detector():
     cfg = get_config()
     detector = UnifiedDetector(config=cfg)
 
-    # Start in default mode (ANATOMICAL_ANCHOR)
+    # Start in ANATOMICAL_ANCHOR mode
+    detector.set_calibration_mode("ANATOMICAL_ANCHOR", corneal_diameter_mm=12.0)
     sc = detector._stabilized_cal
     assert sc.mode == "ANATOMICAL_ANCHOR"
 
@@ -630,4 +631,7 @@ def test_G_switching_modes_on_shared_detector():
     assert sc.mode == "ANATOMICAL_ANCHOR"
     cal_back = sc.update_from_limbus(limbus)
     assert pytest.approx(cal_back.mm_per_px * 225.0, abs=0.01) == 6.0
+
+    # Restore default FIXED_PIXEL_SCALE
+    detector.set_calibration_mode("FIXED_PIXEL_SCALE", manual_px_per_mm=44.5)
 

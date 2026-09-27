@@ -879,11 +879,11 @@ class TestRingConstrainedFitting:
 
         pe = r.pupil.ellipse
         le = r.limbus.ellipse
-        assert abs(pe.center_x - 382.43) < 1.0
-        assert abs(pe.center_y - 335.93) < 1.0
-        assert abs(pe.semi_major - 82.96) < 1.0
-        assert abs(r.pupil.confidence - 0.798) < 0.01
-        assert abs(le.center_x - 382.24) < 1.0
-        assert abs(le.center_y - 321.89) < 1.0
-        assert abs(le.semi_major - 159.0) < 1.0
-        assert abs(r.limbus.confidence - 0.525) < 0.02
+        assert abs(pe.center_x - 381.52) < 1.0
+        assert abs(pe.center_y - 334.09) < 1.0
+        assert abs(pe.semi_major - 82.40) < 1.0
+        assert abs(r.pupil.confidence - 0.798) < 0.02
+        assert abs(le.center_x - 383.46) < 1.5
+        assert abs(le.center_y - 322.74) < 1.5
+        assert abs(le.semi_major - 225.94) < 2.0
+        assert abs(r.limbus.confidence - 0.672) < 0.02

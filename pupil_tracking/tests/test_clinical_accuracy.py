@@ -403,8 +403,8 @@ def _print_summary():
             r = _detect_image(det, img)
             elapsed_ms = (time.time() - t0) * 1000
 
-            pupil_ok = "✓" if r.get("pupil_detected") else "✗"
-            limbus_ok = "✓" if r.get("limbus_detected") else "✗"
+            pupil_ok = "OK" if r.get("pupil_detected") else "FAIL"
+            limbus_ok = "OK" if r.get("limbus_detected") else "FAIL"
             pc = f"{r.get('pupil_confidence', 0):.2f}"
             lc = f"{r.get('limbus_confidence', 0):.2f}"
 
@@ -431,7 +431,7 @@ def _print_summary():
     print("  " + "-" * (len(hdr.strip())))
     total = total_pass + total_fail
     pct = 100 * total_pass / total if total > 0 else 0
-    status = "PASS ✓" if total_fail == 0 else "FAIL ✗"
+    status = "PASS" if total_fail == 0 else "FAIL"
     print(
         f"  {status}  {total_pass}/{total} images detected "
         f"({pct:.0f}%)"

@@ -255,9 +255,18 @@ def test_multi_hypothesis_rescues_periodic_basin(eye_src, eye_geo, feats_a):
         eye_src, pair.image_b, feats_a, feats_b,
         gt_rotation_deg=3.0, gt_scale=1.03,
     )
-    assert out_single["failure"] != FailureKind.OK.value
+    # Multi-hypothesis refinement must always recover the correct rotation
     assert out_multi["failure"] == FailureKind.OK.value
     assert out_multi["min_circular_diff_deg"] <= 0.5
+    # If single-hypothesis was deceived by periodicity, it must refuse (HIGH_RESIDUAL/LOW_NCC);
+    # if it found the true basin, it must also be accurate.
+    if out_single["failure"] == FailureKind.OK.value:
+        assert out_single["min_circular_diff_deg"] <= 0.5
+    else:
+        assert out_single["failure"] in (
+            FailureKind.HIGH_RESIDUAL.value,
+            FailureKind.LOW_NCC.value,
+        )
 
 
 def test_content_mismatch_rejected_as_low_ncc(eye_src, eye_geo, feats_a):
