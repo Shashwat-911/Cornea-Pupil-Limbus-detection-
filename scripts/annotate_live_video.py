@@ -2487,6 +2487,11 @@ def main():
     a.add_argument("--auto-save", type=int, default=10)
     a.add_argument("--max-width", type=int, default=0)
     a.add_argument("--max-height", type=int, default=0)
+    a.add_argument(
+        "--corrected-output",
+        default=None,
+        help="Path to write corrected annotations without overwriting originals",
+    )
 
     m = sub.add_parser("generate-masks")
     m.add_argument(

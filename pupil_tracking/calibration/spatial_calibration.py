@@ -637,11 +637,6 @@ def evaluate_clinical_wtw(
     h_mm = 2.0 * semi_major * mm_px
     v_mm = 2.0 * semi_minor * mm_px
 
-    # Guard against impossible atmospheric-scale artifacts; keep values
-    # inside a clinically plausible human corneal range while preserving
-    # the live px->mm conversion logic.
-    h_mm = float(np.clip(h_mm, 10.5, 12.5))
-    v_mm = float(np.clip(v_mm, 10.0, 12.5))
     mean_mm = (h_mm + v_mm) / 2.0
     astig_diff_mm = abs(h_mm - v_mm)
 

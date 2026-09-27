@@ -225,14 +225,16 @@ class RedLightFilter:
             candidates, connectivity=8
         )
 
-        mask = np.zeros((h, w), dtype=np.uint8)
-        for i in range(1, n_labels):
-            area = stats[i, cv2.CC_STAT_AREA]
-            if area < self.min_area:
-                continue
-            if area > max_blob_area:
-                continue
-            mask[labels == i] = 255
+        if n_labels <= 1:
+            return np.zeros((h, w), dtype=np.uint8)
+
+        # Fast vectorized area filtering via direct lookup table
+        keep = np.zeros(n_labels, dtype=np.uint8)
+        areas = stats[:, cv2.CC_STAT_AREA]
+        valid_mask = (areas >= self.min_area) & (areas <= max_blob_area)
+        valid_mask[0] = False  # Exclude background label 0
+        keep[valid_mask] = 255
+        mask = keep[labels]
 
         return mask
 

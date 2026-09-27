@@ -584,6 +584,13 @@ class SegmentationInference:
             getattr(cfg, "model", None), "multiscale_sizes", [448, 512, 640]
         )
 
+        # On CPU (e.g. low-end testing PCs without discrete GPU), running 3 full ResNet passes
+        # adds 2,000-3,500ms latency. Auto-gate to single-scale on CPU unless explicitly forced.
+        is_cpu = getattr(self.device, "type", str(self.device)) == "cpu"
+        force_cpu_ms = getattr(getattr(cfg, "model", None), "force_multiscale_on_cpu", False)
+        if is_cpu and not force_cpu_ms:
+            enable_ms = False
+
         if not enable_ms or len(ms_sizes) <= 1:
             # Single-scale: just run the base tensor
             logits = self.model(tensor_base)
