@@ -136,30 +136,32 @@ class IrisEnhancer:
         else:
             img = polar_image.copy()
 
-        # CLAHE
+        # Step 1: CLAHE enhancement
         enhanced = self._clahe.apply(img)
-
-        # Column-wise normalisation to remove radial gradient
         enhanced_f = enhanced.astype(np.float32)
-        for col in range(enhanced_f.shape[1]):
-            column = enhanced_f[:, col]
-            if polar_mask is not None:
-                valid = polar_mask[:, col] > 0
-                if np.sum(valid) < 3:
-                    continue
-                col_vals = column[valid]
-            else:
-                col_vals = column
 
-            col_mean = np.mean(col_vals)
-            col_std = np.std(col_vals) + 1e-6
-            enhanced_f[:, col] = (column - col_mean) / col_std
+        # Step 2: Remove radial gradient baseline across tracks (row-wise mean subtraction)
+        # Note: Do NOT subtract column mean, which would destroy angular signals!
+        if polar_mask is not None:
+            mask_bool = polar_mask > 0
+            row_sums = np.sum(enhanced_f * mask_bool, axis=1, keepdims=True)
+            row_counts = np.maximum(np.sum(mask_bool, axis=1, keepdims=True), 1.0)
+            row_means = row_sums / row_counts
+            enhanced_f = enhanced_f - row_means
+            enhanced_f[~mask_bool] = 0.0
+        else:
+            row_means = np.mean(enhanced_f, axis=1, keepdims=True)
+            enhanced_f = enhanced_f - row_means
 
-        # Rescale to [0, 1]
-        vmin, vmax = np.percentile(enhanced_f[enhanced_f != 0], [2, 98]) if np.any(enhanced_f != 0) else (0, 1)
-        if vmax - vmin < 1e-6:
-            vmax = vmin + 1.0
-        result = np.clip((enhanced_f - vmin) / (vmax - vmin), 0, 1).astype(np.float32)
+        # Step 3: Rescale to [0, 1]
+        valid_vals = enhanced_f[enhanced_f != 0.0] if polar_mask is not None else enhanced_f.flatten()
+        if len(valid_vals) > 10:
+            vmin, vmax = np.percentile(valid_vals, [2, 98])
+            if vmax - vmin < 1e-4:
+                vmax = vmin + 1.0
+            result = np.clip((enhanced_f - vmin) / (vmax - vmin), 0.0, 1.0).astype(np.float32)
+        else:
+            result = (enhanced_f / 255.0).astype(np.float32)
 
         if polar_mask is not None:
             result = result * (polar_mask.astype(np.float32) / 255.0)

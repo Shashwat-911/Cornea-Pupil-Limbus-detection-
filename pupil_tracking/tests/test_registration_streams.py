@@ -87,3 +87,28 @@ def test_vessel_tracker_stream():
 
     res = stream.run(img1, img2, det1, det2)
     assert res.stream == StreamName.LIMBAL_VESSELS
+
+
+def test_angular_profile_stream_synthetic():
+    from pupil_tracking.registration.streams.angular_profile import AngularProfileStream
+    stream = AngularProfileStream()
+    assert stream.name == StreamName.ANGULAR_PROFILE
+
+    # Create synthetic eye image with textured iris
+    img = np.zeros((200, 200, 3), dtype=np.uint8)
+    y, x = np.ogrid[:200, :200]
+    dist = np.sqrt((x - 100)**2 + (y - 100)**2)
+    angle = np.arctan2(y - 100, x - 100)
+    iris = (dist >= 25) & (dist <= 60)
+    texture = (128 + 80 * np.sin(8 * angle) + 40 * np.cos(16 * angle)).astype(np.uint8)
+    for c in range(3):
+        img[iris, c] = texture[iris]
+
+    det1 = _make_dummy_detection()
+    det2 = _make_dummy_detection()
+
+    res = stream.run(img, img, det1, det2)
+    assert res.stream == StreamName.ANGULAR_PROFILE
+    assert res.valid is True
+    assert abs(res.torsion_deg) < 1.0  # Zero rotation check
+    assert res.confidence > 0.50

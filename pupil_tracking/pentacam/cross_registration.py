@@ -271,72 +271,24 @@ class CrossModalityRegistrationEngine:
         mask_ref: Optional[np.ndarray],
         mask_curr: Optional[np.ndarray],
     ) -> Tuple[float, float, float]:
-        """Compute angular shift via 1-D cross-power spectrum."""
-        # 1-D profiles along angular axis (averaged across radial dimension)
-        profile_ref = np.mean(enh_ref, axis=0)
-        profile_curr = np.mean(enh_curr, axis=0)
+        """Compute angular shift via 2D Phase Correlation."""
+        src1 = enh_ref.astype(np.float32)
+        src2 = enh_curr.astype(np.float32)
 
-        # Combined mask: only use angles where both images are valid
+        hann_rad = np.hanning(src1.shape[0]).astype(np.float32)[:, None]
+        window = np.repeat(hann_rad, src1.shape[1], axis=1)
+
+        shift, resp = cv2.phaseCorrelate(src1, src2, window)
+        deg_per_sample = 360.0 / float(self.num_angles)
+        shift_deg = float((-shift[0] * deg_per_sample + 180.0) % 360.0 - 180.0)
+
         if mask_ref is not None and mask_curr is not None:
-            v_ref = np.mean(mask_ref, axis=0) > 127
-            v_curr = np.mean(mask_curr, axis=0) > 127
-            v_comb = v_ref & v_curr
-            v_frac = float(np.mean(v_comb))
+            v_frac = float(np.mean((mask_ref > 127) & (mask_curr > 127)))
         else:
-            v_comb = np.ones(len(profile_ref), dtype=bool)
             v_frac = 1.0
 
-        if v_frac < 0.3:
-            v_comb = np.ones(len(profile_ref), dtype=bool)
-
-        profile_ref = profile_ref * v_comb
-        profile_curr = profile_curr * v_comb
-
-        n = len(profile_ref)
-
-        # FFT
-        f_ref = np.fft.fft(profile_ref)
-        f_curr = np.fft.fft(profile_curr)
-
-        cross = f_ref * np.conj(f_curr)
-        mag = np.abs(cross)
-        mag = np.maximum(mag, 1e-10)
-        phase_only = cross / mag
-
-        corr = np.real(np.fft.ifft(phase_only))
-
-        peak_idx = int(np.argmax(corr))
-        peak_val = corr[peak_idx]
-
-        # Sub-pixel parabolic interpolation
-        if 0 < peak_idx < n - 1:
-            y_l = corr[peak_idx - 1]
-            y_c = corr[peak_idx]
-            y_r = corr[peak_idx + 1]
-            denom = 2.0 * (2.0 * y_c - y_l - y_r)
-            sub_px = (y_l - y_r) / denom if abs(denom) > 1e-9 else 0.0
-            refined_idx = float(peak_idx) + sub_px
-        else:
-            refined_idx = float(peak_idx)
-
-        # Handle wrap-around: if shift > half range, it's negative
-        if refined_idx > n / 2.0:
-            refined_idx -= n
-
-        deg_per_sample = 360.0 / self.num_angles
-        shift_deg = refined_idx * deg_per_sample
-
-        # Peak-to-Sidelobe Ratio (PSR)
-        sidelobes = np.delete(corr, peak_idx)
-        sidelobe_mean = float(np.mean(sidelobes))
-        sidelobe_std = float(np.std(sidelobes) + 1e-10)
-        psr = float((peak_val - sidelobe_mean) / sidelobe_std)
-
-        # Sigmoid confidence mapping
-        psr_conf = 1.0 / (1.0 + np.exp(-0.30 * (psr - 8.0)))
-        validity_conf = min(v_frac / 0.6, 1.0)
-        conf = float(np.clip(psr_conf * validity_conf, 0.0, 1.0))
-
+        psr = float(resp * 10.0)
+        conf = float(np.clip(resp * min(v_frac / 0.5, 1.0), 0.0, 1.0))
         return float(shift_deg), conf, psr
 
     def _verify_landmarks_fast(

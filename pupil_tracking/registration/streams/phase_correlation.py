@@ -56,6 +56,11 @@ class PhaseCorrelationStream(BaseStream):
         img_curr: np.ndarray,
         detection_ref: EyeDetectionResult,
         detection_curr: EyeDetectionResult,
+        polar_ref: Optional[Any] = None,
+        polar_curr: Optional[Any] = None,
+        enh_ref: Optional[np.ndarray] = None,
+        enh_curr: Optional[np.ndarray] = None,
+        **kwargs,
     ) -> StreamResult:
         """Compute torsion via phase correlation of polar iris images."""
 
@@ -64,59 +69,97 @@ class PhaseCorrelationStream(BaseStream):
                 metadata={"error": "incomplete_detection"}
             )
 
-        # Step 1: Polar unwrap
-        polar_ref = self.unwrapper.unwrap_from_detection(img_ref, detection_ref)
-        polar_curr = self.unwrapper.unwrap_from_detection(img_curr, detection_curr)
+        # Step 1: Polar unwrap using Daugman rubber sheet (or reuse precomputed)
+        if polar_ref is None:
+            polar_ref = self.unwrapper.unwrap_from_detection(img_ref, detection_ref)
+        if polar_curr is None:
+            polar_curr = self.unwrapper.unwrap_from_detection(img_curr, detection_curr)
 
         if not polar_ref.valid or not polar_curr.valid:
             return self._make_result(
                 metadata={"error": "polar_unwrap_failed"}
             )
 
-        # Step 2: Enhance
-        enh_ref = self.enhancer.enhance_polar(polar_ref.image, polar_ref.mask)
-        enh_curr = self.enhancer.enhance_polar(polar_curr.image, polar_curr.mask)
+        # Step 2: Enhance polar textures (or reuse precomputed)
+        if enh_ref is None:
+            enh_ref = self.enhancer.enhance_polar(polar_ref.image, polar_ref.mask)
+        if enh_curr is None:
+            enh_curr = self.enhancer.enhance_polar(polar_curr.image, polar_curr.mask)
 
-        # Step 3: Phase correlation along angular axis
-        # Average along radial axis to get 1-D angular profiles
-        profile_ref = np.mean(enh_ref, axis=0)
-        profile_curr = np.mean(enh_curr, axis=0)
+        num_radial, num_angles = enh_ref.shape[:2]
+        deg_per_sample = 360.0 / float(num_angles)
 
-        # Combined mask: only use angles where both images are valid
+        # Step 3: Compute valid pixel coverage
         if polar_ref.mask is not None and polar_curr.mask is not None:
-            valid_mask = (np.mean(polar_ref.mask, axis=0) > 127) & \
-                         (np.mean(polar_curr.mask, axis=0) > 127)
-            valid_frac = np.mean(valid_mask)
+            combined_mask = (polar_ref.mask > 127) & (polar_curr.mask > 127)
+            valid_frac = float(np.mean(combined_mask))
         else:
-            valid_mask = np.ones(len(profile_ref), dtype=bool)
             valid_frac = 1.0
 
-        if valid_frac < 0.3:
+        if valid_frac < 0.25:
             return self._make_result(
-                metadata={"error": "insufficient_valid_pixels",
-                           "valid_fraction": float(valid_frac)}
+                metadata={"error": "insufficient_valid_pixels", "valid_fraction": valid_frac}
             )
 
-        # Zero out invalid regions
-        profile_ref = profile_ref * valid_mask
-        profile_curr = profile_curr * valid_mask
+        # Step 4: 2D Fourier Phase Correlation with radial-only Hann window
+        # (Radial window prevents boundary edge ringing; periodic angular axis needs no window)
+        hann_rad = np.hanning(num_radial).astype(np.float32)[:, None]
+        window = np.repeat(hann_rad, num_angles, axis=1)
 
-        # 1-D phase correlation
-        shift_deg, psr, peak_val = self._phase_correlate_1d(
-            profile_ref, profile_curr, polar_ref.num_angles
-        )
+        src1 = enh_ref.astype(np.float32)
+        src2 = enh_curr.astype(np.float32)
 
-        # Confidence from PSR and valid fraction
-        confidence = self._compute_confidence(psr, valid_frac, peak_val)
+        shift_global, resp_global = cv2.phaseCorrelate(src1, src2, window)
+        ang_global = (-shift_global[0] * deg_per_sample + 180.0) % 360.0 - 180.0
+
+        # Step 5: Multi-band radial cross-validation (pupillary collarette vs outer ciliary)
+        half_r = max(num_radial // 2, 8)
+        win_half = window[:half_r, :]
+        shift_inner, resp_inner = cv2.phaseCorrelate(src1[:half_r, :], src2[:half_r, :], win_half)
+        shift_outer, resp_outer = cv2.phaseCorrelate(src1[half_r:, :], src2[half_r:, :], win_half)
+
+        ang_inner = (-shift_inner[0] * deg_per_sample + 180.0) % 360.0 - 180.0
+        ang_outer = (-shift_outer[0] * deg_per_sample + 180.0) % 360.0 - 180.0
+
+        diff_inner = abs((ang_inner - ang_global + 180.0) % 360.0 - 180.0)
+        diff_outer = abs((ang_outer - ang_global + 180.0) % 360.0 - 180.0)
+
+        # Consensus weighting
+        agree_inner = diff_inner < 2.0
+        agree_outer = diff_outer < 2.0
+
+        if agree_inner and agree_outer:
+            # Both radial zones agree — excellent quality
+            fused_ang = float(ang_global)
+            band_agreement = 1.0
+        elif agree_inner and resp_inner >= resp_outer:
+            # Inner zone cleaner (e.g. eyelids occluding outer zone)
+            fused_ang = float(ang_inner)
+            band_agreement = 0.75
+        elif agree_outer:
+            # Outer zone cleaner (e.g. pupil dilation/illumination artifact)
+            fused_ang = float(ang_outer)
+            band_agreement = 0.75
+        else:
+            fused_ang = float(ang_global)
+            band_agreement = 0.5
+
+        # Confidence: response * band agreement * validity
+        base_resp = max(resp_global, resp_inner, resp_outer)
+        confidence = float(np.clip(base_resp * band_agreement * min(valid_frac / 0.5, 1.0), 0.0, 1.0))
 
         return self._make_result(
-            torsion_deg=shift_deg,
+            torsion_deg=fused_ang,
             confidence=confidence,
             metadata={
-                "psr": float(psr),
-                "peak_value": float(peak_val),
+                "response": float(resp_global),
+                "resp_inner": float(resp_inner),
+                "resp_outer": float(resp_outer),
+                "ang_inner": float(ang_inner),
+                "ang_outer": float(ang_outer),
+                "band_agreement": float(band_agreement),
                 "valid_fraction": float(valid_frac),
-                "num_angles": polar_ref.num_angles,
+                "num_angles": num_angles,
             },
         )
 

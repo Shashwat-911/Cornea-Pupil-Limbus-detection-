@@ -66,6 +66,7 @@ class DeepMatcherStream(BaseStream):
         img_curr: np.ndarray,
         detection_ref: EyeDetectionResult,
         detection_curr: EyeDetectionResult,
+        **kwargs,
     ) -> StreamResult:
         """Match features between iris crops and compute rotation."""
 
@@ -137,12 +138,14 @@ class DeepMatcherStream(BaseStream):
         crop_center = np.array([crop_ref['target_size'] / 2.0,
                                  crop_ref['target_size'] / 2.0])
 
+        # Map image coordinates (y downwards) to Cartesian (y upwards)
+        # so counter-clockwise rotation (excyclotorsion) is positive
         angles_ref = np.arctan2(
-            pts_ref[:, 1] - crop_center[1],
+            -(pts_ref[:, 1] - crop_center[1]),
             pts_ref[:, 0] - crop_center[0],
         )
         angles_curr = np.arctan2(
-            pts_curr[:, 1] - crop_center[1],
+            -(pts_curr[:, 1] - crop_center[1]),
             pts_curr[:, 0] - crop_center[0],
         )
 

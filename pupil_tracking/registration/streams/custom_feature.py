@@ -92,6 +92,7 @@ class CustomFeatureStream(BaseStream):
         img_curr: np.ndarray,
         detection_ref: EyeDetectionResult,
         detection_curr: EyeDetectionResult,
+        **kwargs,
     ) -> StreamResult:
         """Extract landmarks, match, compute rotation."""
 

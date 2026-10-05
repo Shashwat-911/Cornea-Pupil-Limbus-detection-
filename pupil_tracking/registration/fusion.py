@@ -46,6 +46,9 @@ class FusionEngine:
     # Prior weights for each stream based on expected reliability
     STREAM_PRIORS = {
         "phase_correlation": 0.85,
+        "iris_code": 0.90,
+        "polar_optical_flow": 0.80,
+        "angular_profile": 0.80,
         "deep_matcher": 0.75,
         "ink_markers": 0.95,
         "limbal_vessels": 0.70,

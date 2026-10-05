@@ -51,6 +51,7 @@ class InkTrackerStream(BaseStream):
         img_curr: np.ndarray,
         detection_ref: EyeDetectionResult,
         detection_curr: EyeDetectionResult,
+        **kwargs,
     ) -> StreamResult:
         """Detect ink marks and compute rotation from their displacement."""
 
@@ -78,12 +79,13 @@ class InkTrackerStream(BaseStream):
         le_ref = detection_ref.limbus.ellipse
         le_curr = detection_curr.limbus.ellipse
 
+        # Map image coordinates to Cartesian so CCW is positive
         angles_ref = np.array([
-            np.arctan2(my - le_ref.center_y, mx - le_ref.center_x)
+            np.arctan2(-(my - le_ref.center_y), mx - le_ref.center_x)
             for mx, my, _ in markers_ref
         ])
         angles_curr = np.array([
-            np.arctan2(my - le_curr.center_y, mx - le_curr.center_x)
+            np.arctan2(-(my - le_curr.center_y), mx - le_curr.center_x)
             for mx, my, _ in markers_curr
         ])
 
@@ -133,6 +135,36 @@ class InkTrackerStream(BaseStream):
                 "matched": len(matches),
             },
         )
+
+    def _match_markers(
+        self,
+        angles_ref: np.ndarray,
+        angles_curr: np.ndarray,
+    ) -> List[Tuple[int, int]]:
+        """Match markers by angular proximity (greedy nearest).
+
+        Returns list of (ref_idx, curr_idx) pairs.
+        """
+        matches = []
+        used_curr = set()
+
+        for ri, a_ref in enumerate(angles_ref):
+            best_ci = -1
+            best_dist = np.radians(30)  # Max 30° difference
+
+            for ci, a_curr in enumerate(angles_curr):
+                if ci in used_curr:
+                    continue
+                dist = abs((a_ref - a_curr + np.pi) % (2 * np.pi) - np.pi)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_ci = ci
+
+            if best_ci >= 0:
+                matches.append((ri, best_ci))
+                used_curr.add(best_ci)
+
+        return matches
 
     def _detect_ink_markers(
         self,
@@ -235,33 +267,3 @@ def detect_limbal_purple_markers(
             markers.append((float(cx), float(cy), float(radius)))
 
     return markers
-
-    def _match_markers(
-        self,
-        angles_ref: np.ndarray,
-        angles_curr: np.ndarray,
-    ) -> List[Tuple[int, int]]:
-        """Match markers by angular proximity (greedy nearest).
-
-        Returns list of (ref_idx, curr_idx) pairs.
-        """
-        matches = []
-        used_curr = set()
-
-        for ri, a_ref in enumerate(angles_ref):
-            best_ci = -1
-            best_dist = np.radians(30)  # Max 30° difference
-
-            for ci, a_curr in enumerate(angles_curr):
-                if ci in used_curr:
-                    continue
-                dist = abs((a_ref - a_curr + np.pi) % (2 * np.pi) - np.pi)
-                if dist < best_dist:
-                    best_dist = dist
-                    best_ci = ci
-
-            if best_ci >= 0:
-                matches.append((ri, best_ci))
-                used_curr.add(best_ci)
-
-        return matches

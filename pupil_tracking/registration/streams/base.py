@@ -55,24 +55,10 @@ class BaseStream(ABC):
         img_curr: np.ndarray,
         detection_ref: EyeDetectionResult,
         detection_curr: EyeDetectionResult,
+        *args,
+        **kwargs,
     ) -> StreamResult:
-        """Execute the stream with timing and error handling.
-
-        Parameters
-        ----------
-        img_ref : np.ndarray
-            Reference (pre-operative) image.
-        img_curr : np.ndarray
-            Current (intra-operative) image.
-        detection_ref : EyeDetectionResult
-            Detection result for the reference image.
-        detection_curr : EyeDetectionResult
-            Detection result for the current image.
-
-        Returns
-        -------
-        StreamResult
-        """
+        """Execute the stream with timing and error handling."""
         if not self._enabled:
             return StreamResult(
                 stream=self.name,
@@ -82,7 +68,7 @@ class BaseStream(ABC):
         start = time.perf_counter()
         try:
             result = self.compute(
-                img_ref, img_curr, detection_ref, detection_curr
+                img_ref, img_curr, detection_ref, detection_curr, *args, **kwargs
             )
             elapsed_ms = (time.perf_counter() - start) * 1000.0
             result.processing_time_ms = elapsed_ms

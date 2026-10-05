@@ -113,57 +113,56 @@ class PolarUnwrapper:
 
         h, w = gray.shape[:2]
         angles = np.linspace(0, 2 * np.pi, self.num_angles, endpoint=False)
+        # Use Daugman rubber-sheet model: interpolate between pupil and limbus margins
+        # Parametric representation of pupil ellipse at all angles
+        cos_a = np.cos(angles)
+        sin_a = np.sin(angles)
 
-        # Compute inner (pupil) and outer (limbus) radii at each angle
-        inner_radii = self._ellipse_radii_at_angles(
-            pupil_center, pupil_axes, pupil_angle_deg, limbus_center, angles
-        )
-        outer_radii = self._ellipse_radii_at_angles(
-            limbus_center, limbus_axes, limbus_angle_deg, limbus_center, angles
-        )
+        theta_p = np.radians(pupil_angle_deg)
+        cos_tp, sin_tp = np.cos(theta_p), np.sin(theta_p)
+        ap, bp = max(pupil_axes[0], 1.0), max(pupil_axes[1], 1.0)
+        px = pupil_center[0] + (ap * cos_a * cos_tp - bp * sin_a * sin_tp)
+        py = pupil_center[1] + (ap * cos_a * sin_tp + bp * sin_a * cos_tp)
 
-        # Apply margins
-        inner_radii *= (1.0 + self.inner_margin)
-        outer_radii *= (1.0 - self.outer_margin)
+        theta_l = np.radians(limbus_angle_deg)
+        cos_tl, sin_tl = np.cos(theta_l), np.sin(theta_l)
+        al, bl = max(limbus_axes[0], 1.0), max(limbus_axes[1], 1.0)
+        lx = limbus_center[0] + (al * cos_a * cos_tl - bl * sin_a * sin_tl)
+        ly = limbus_center[1] + (al * cos_a * sin_tl + bl * sin_a * cos_tl)
 
-        # Ensure inner < outer everywhere
-        valid_angles = inner_radii < outer_radii
-        if not np.any(valid_angles):
-            logger.warning("No valid angular range for polar unwrapping")
-            return result
+        # Normalized radial coordinates with margins
+        r_inner = float(np.clip(self.inner_margin, 0.0, 0.4))
+        r_outer = float(np.clip(self.outer_margin, 0.0, 0.4))
+        r_steps = np.linspace(r_inner, 1.0 - r_outer, self.num_radial, dtype=np.float32)[:, None]
 
-        # Build the full sampling grid with array operations, then let OpenCV
-        # perform nearest-neighbour sampling in native code.
-        cx, cy = limbus_center
-        radii = np.linspace(inner_radii, outer_radii, self.num_radial, axis=0)
-        cos_a = np.cos(angles)[None, :]
-        sin_a = np.sin(angles)[None, :]
-        x_int = np.rint(cx + radii * cos_a).astype(np.int32)
-        y_int = np.rint(cy + radii * sin_a).astype(np.int32)
+        # Vectorized rubber sheet coordinate grid: (num_radial, num_angles)
+        x_coords = ((1.0 - r_steps) * px + r_steps * lx).astype(np.float32)
+        y_coords = ((1.0 - r_steps) * py + r_steps * ly).astype(np.float32)
+
         in_bounds = (
-            valid_angles[None, :]
-            & (x_int >= 0)
-            & (x_int < w)
-            & (y_int >= 0)
-            & (y_int < h)
+            (x_coords >= 0.0)
+            & (x_coords < float(w - 1))
+            & (y_coords >= 0.0)
+            & (y_coords < float(h - 1))
         )
 
         polar_img = cv2.remap(
             gray,
-            x_int.astype(np.float32),
-            y_int.astype(np.float32),
-            interpolation=cv2.INTER_NEAREST,
-            borderMode=cv2.BORDER_CONSTANT,
-            borderValue=0,
+            x_coords,
+            y_coords,
+            interpolation=cv2.INTER_LINEAR,
+            borderMode=cv2.BORDER_REFLECT,
         ).astype(np.float32, copy=False)
-        polar_img[~in_bounds] = 0.0
-        polar_mask = in_bounds.astype(np.uint8) * 255
+
+        # Specular reflection & eyelid occlusion masking
+        valid_texture = in_bounds & (polar_img < 250.0) & (polar_img > 5.0)
+        polar_mask = valid_texture.astype(np.uint8) * 255
 
         result.image = polar_img
         result.mask = polar_mask
-        result.inner_radius = float(np.median(inner_radii[valid_angles]))
-        result.outer_radius = float(np.median(outer_radii[valid_angles]))
-        result.valid = True
+        result.inner_radius = float(ap)
+        result.outer_radius = float(al)
+        result.valid = bool(np.mean(valid_texture) > 0.3)
 
         return result
 

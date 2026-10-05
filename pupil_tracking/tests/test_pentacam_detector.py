@@ -108,6 +108,8 @@ class TestPentacamIrisDetector:
         img = create_synthetic_pentacam_image(with_ui=True)
         det = PentacamIrisDetector()
 
+        # Warm up for import/first-run overhead
+        _ = det.detect(img)
         res = det.detect(img)
         assert res.valid is True
         assert res.status == PentacamDetectionStatus.OK
