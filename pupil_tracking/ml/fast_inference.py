@@ -593,8 +593,8 @@ class FastInference:
     def detect(
         self,
         image_bgr: np.ndarray,
-        scale_x: float = 1.0,
-        scale_y: float = 1.0,
+        scale_x: Optional[float] = None,
+        scale_y: Optional[float] = None,
         offset_x: float = 0.0,
         offset_y: float = 0.0,
     ) -> Dict[str, object]:
@@ -602,7 +602,8 @@ class FastInference:
         Segment + extract ellipse parameters as a flat dict.
 
         Coordinates are mapped from model space to original image
-        space using scale and offset.
+        space using scale and offset. If scale_x/scale_y are omitted,
+        they are automatically inferred from the input image dimensions.
 
         Returns
         -------
@@ -610,6 +611,12 @@ class FastInference:
             pupil_radius, pupil_confidence, limbus_*, processing_time_ms
         """
         t0 = time.time()
+        h, w = image_bgr.shape[:2]
+        if scale_x is None:
+            scale_x = float(w) / float(self.input_size)
+        if scale_y is None:
+            scale_y = float(h) / float(self.input_size)
+
         pupil_mask, iris_mask, probs_np = self.segment(image_bgr)
 
         result = self._extract_detection(

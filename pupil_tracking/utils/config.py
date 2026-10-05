@@ -131,7 +131,7 @@ class DetectionConfig:
     morph_iterations: int = 2
     enable_classical_fallback: bool = True
     classical_confidence_penalty: float = 0.85
-    pre_docked_limbus_shrink_factor: float = 0.93
+    pre_docked_limbus_shrink_factor: float = 1.0
 
 
 @dataclass
@@ -633,13 +633,13 @@ class SubPixelConfig:
     use_scharr: bool = True
     interpolation_step: float = 0.25
     use_parabolic_peak: bool = True
-    use_multiscale_gradient: bool = True
+    use_multiscale_gradient: bool = False
     gradient_scales: tuple = (1, 3)
     gradient_scale_weights: tuple = (0.6, 0.4)
     use_weighted_fit: bool = True
     multi_pass_ransac: bool = True
     ransac_tighten_factor: float = 0.5
-    bootstrap_uncertainty: bool = True
+    bootstrap_uncertainty: bool = False
     bootstrap_n_samples: int = 50
 
 
@@ -780,11 +780,18 @@ class RegistrationConfig:
 
     # Stream enables
     enable_phase_correlation: bool = True
+    enable_angular_profile: bool = True
+    enable_iris_code: bool = True
+    enable_polar_optical_flow: bool = True
     enable_deep_matcher: bool = True
     enable_ink_tracker: bool = True
     enable_vessel_tracker: bool = True
     enable_custom_feature: bool = True
     enable_iris_features: bool = True
+
+    # Performance & Filtering
+    fast_cascade: bool = False
+    enable_temporal_filter: bool = False
 
     # Custom feature model
     custom_feature_model_path: str = "models/iris_features/iris_feature_model.onnx"

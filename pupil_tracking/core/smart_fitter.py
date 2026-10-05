@@ -79,13 +79,20 @@ class FitResult:
     def diameter_px(self) -> float:
         return self.radius * 2.0
 
-    def to_cv2_ellipse(self) -> Tuple:
-        """Return as cv2.ellipse format: ((cx,cy), (w,h), angle)."""
-        return (
-            (self.center_x, self.center_y),
-            (self.semi_major * 2, self.semi_minor * 2),
-            self.angle_deg,
-        )
+    def scale(self, factor: float) -> "FitResult":
+        """Scale geometry by a scale factor."""
+        self.center_x *= factor
+        self.center_y *= factor
+        self.semi_major *= factor
+        self.semi_minor *= factor
+        self.radius *= factor
+        self.fit_rms_residual *= factor
+        self.uncertainty_center_x *= factor
+        self.uncertainty_center_y *= factor
+        self.uncertainty_radius *= factor
+        if self.contour_points is not None:
+            self.contour_points = self.contour_points * factor
+        return self
 
 
 # ────────────────────────────────────────────────────────────────
@@ -311,7 +318,7 @@ def _ellipse_residuals(points: np.ndarray,
 
 def _ransac_circle(
     points: np.ndarray,
-    max_iterations: int = 100,
+    max_iterations: int = 12,
     inlier_threshold: float = 2.0,
     min_inlier_ratio: float = 0.6,
     multi_pass: bool = True,
@@ -355,9 +362,12 @@ def _ransac_circle(
     best_params = None
 
     rng = np.random.RandomState(42)
+    triplets = rng.randint(0, n, size=(max_iterations, 3))
 
-    for _ in range(max_iterations):
-        idx = rng.choice(n, 3, replace=False)
+    for t_idx in range(max_iterations):
+        idx = triplets[t_idx]
+        if idx[0] == idx[1] or idx[1] == idx[2] or idx[0] == idx[2]:
+            continue
         sample = points[idx]
 
         result = _fit_circle_kasa(sample)
@@ -368,14 +378,21 @@ def _ransac_circle(
         if r <= 0 or r > 1e4:
             continue
 
-        residuals = np.abs(_circle_residuals(points, cx, cy, r))
-        inlier_mask = residuals < inlier_threshold
-        count = np.sum(inlier_mask)
+        # Fast squared distance check to avoid np.sqrt per point
+        dx = points[:, 0] - cx
+        dy = points[:, 1] - cy
+        d2 = dx * dx + dy * dy
+        r_min = max(0.0, r - inlier_threshold) ** 2
+        r_max = (r + inlier_threshold) ** 2
+        inlier_mask = (d2 >= r_min) & (d2 <= r_max)
+        count = int(np.sum(inlier_mask))
 
         if count > best_count:
             best_count = count
             best_inliers = inlier_mask
             best_params = (cx, cy, r)
+            if count >= int(n * 0.95):  # 95% inliers found, early exit
+                break
 
     if best_params is None or best_count < n * min_inlier_ratio:
         return None
@@ -432,27 +449,27 @@ def _compute_multiscale_gradient(
     Returns
     -------
     (grad_mag, grad_x, grad_y)
-        Fused gradient magnitude, and fine-scale x/y gradients
-        (used for normal direction computation).
+        Fused gradient magnitude, and fine-scale x/y gradients.
     """
-    grad_mag_total = np.zeros(gray.shape, dtype=np.float64)
+    # Optimized with cv2.CV_32F and cv2.magnitude for SIMD acceleration.
+    grad_mag_total = np.zeros(gray.shape, dtype=np.float32)
     grad_x_fine = None
     grad_y_fine = None
 
     for i, (sigma, weight) in enumerate(zip(scales, scale_weights)):
         if sigma <= 1:
-            gx = cv2.Scharr(gray, cv2.CV_64F, 1, 0)
-            gy = cv2.Scharr(gray, cv2.CV_64F, 0, 1)
+            gx = cv2.Scharr(gray, cv2.CV_32F, 1, 0)
+            gy = cv2.Scharr(gray, cv2.CV_32F, 0, 1)
         else:
-            blurred = cv2.GaussianBlur(gray, (0, 0), sigma)
-            gx = cv2.Scharr(blurred, cv2.CV_64F, 1, 0)
-            gy = cv2.Scharr(blurred, cv2.CV_64F, 0, 1)
+            blurred = cv2.GaussianBlur(gray, (0, 0), float(sigma))
+            gx = cv2.Scharr(blurred, cv2.CV_32F, 1, 0)
+            gy = cv2.Scharr(blurred, cv2.CV_32F, 0, 1)
 
-        mag = np.sqrt(gx ** 2 + gy ** 2)
+        mag = cv2.magnitude(gx, gy)
         max_val = mag.max()
         if max_val > 0:
-            mag /= max_val
-        grad_mag_total += weight * mag
+            mag = mag / max_val
+        grad_mag_total += np.float32(weight) * mag
 
         # Keep fine-scale gradients for normal direction
         if i == 0:
@@ -516,6 +533,9 @@ def _refine_contour_subpixel(
     np.ndarray
         (N, 2) refined contour points (float64).
     """
+    if len(contour) == 0:
+        return contour
+
     h, w = image_gray.shape[:2]
     refined = contour.copy().astype(np.float64)
 
@@ -529,67 +549,66 @@ def _refine_contour_subpixel(
     elif use_multiscale:
         grad_mag, grad_x, grad_y = _compute_multiscale_gradient(image_gray)
     else:
-        grad_x = cv2.Scharr(image_gray, cv2.CV_64F, 1, 0)
-        grad_y = cv2.Scharr(image_gray, cv2.CV_64F, 0, 1)
-        grad_mag = np.sqrt(grad_x ** 2 + grad_y ** 2)
+        grad_x = cv2.Scharr(image_gray, cv2.CV_32F, 1, 0)
+        grad_y = cv2.Scharr(image_gray, cv2.CV_32F, 0, 1)
+        grad_mag = cv2.magnitude(grad_x, grad_y)
 
     n_steps = int(search_radius / interpolation_step)
-    t_values = np.arange(-n_steps, n_steps + 1) * interpolation_step
+    t_values = (np.arange(-n_steps, n_steps + 1) * interpolation_step).astype(np.float32)
+    K = len(t_values)
 
-    for i in range(len(contour)):
-        px, py = contour[i]
-        ix, iy = int(round(px)), int(round(py))
+    px = refined[:, 0]
+    py = refined[:, 1]
+    ix = np.clip(np.round(px).astype(int), 0, w - 1)
+    iy = np.clip(np.round(py).astype(int), 0, h - 1)
 
-        if not (1 <= iy < h - 1 and 1 <= ix < w - 1):
-            continue
+    pt_gx = grad_x[iy, ix]
+    pt_gy = grad_y[iy, ix]
+    g_len = np.hypot(pt_gx, pt_gy)
+    valid = (g_len > 1e-6) & (ix >= 1) & (ix < w - 1) & (iy >= 1) & (iy < h - 1)
+    if not np.any(valid):
+        return refined
 
-        gx = grad_x[iy, ix]
-        gy = grad_y[iy, ix]
-        g_len = math.sqrt(gx ** 2 + gy ** 2)
+    g_len_safe = np.where(valid, g_len, 1.0)
+    nx = np.where(valid, pt_gx / g_len_safe, 0.0)
+    ny = np.where(valid, pt_gy / g_len_safe, 0.0)
 
-        if g_len < 1e-6:
-            continue
+    # Grid of sample coordinates: shape (N, K)
+    map_x = (px[:, None] + nx[:, None] * t_values[None, :]).astype(np.float32)
+    map_y = (py[:, None] + ny[:, None] * t_values[None, :]).astype(np.float32)
 
-        nx, ny = gx / g_len, gy / g_len
+    # cv2.remap computes all bilinear samples in one vectorized C++ SIMD call
+    samples = cv2.remap(
+        grad_mag.astype(np.float32),
+        map_x,
+        map_y,
+        cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_REPLICATE,
+    )
 
-        # Sample gradient magnitude along normal with bilinear interpolation
-        samples = np.zeros(len(t_values))
-        for j, t in enumerate(t_values):
-            sx = px + nx * t
-            sy = py + ny * t
+    peak_idx = np.argmax(samples, axis=1)
 
-            if not (0 <= sx < w - 1 and 0 <= sy < h - 1):
-                continue
+    if use_parabolic:
+        valid_peak = valid & (peak_idx >= 1) & (peak_idx < K - 1)
+        row = np.where(valid_peak)[0]
+        idx = peak_idx[valid_peak]
 
-            # Bilinear interpolation
-            x0, y0 = int(sx), int(sy)
-            fx, fy = sx - x0, sy - y0
-            samples[j] = (
-                grad_mag[y0, x0] * (1.0 - fx) * (1.0 - fy)
-                + grad_mag[y0, x0 + 1] * fx * (1.0 - fy)
-                + grad_mag[y0 + 1, x0] * (1.0 - fx) * fy
-                + grad_mag[y0 + 1, x0 + 1] * fx * fy
-            )
+        y_m1 = samples[row, idx - 1]
+        y_0 = samples[row, idx]
+        y_p1 = samples[row, idx + 1]
 
-        # Find peak
-        peak_idx = int(np.argmax(samples))
+        denom = 2.0 * (2.0 * y_0 - y_m1 - y_p1)
+        denom_ok = np.abs(denom) > 1e-12
+        delta = np.zeros(len(row), dtype=np.float32)
+        delta[denom_ok] = (y_m1[denom_ok] - y_p1[denom_ok]) / denom[denom_ok]
 
-        if use_parabolic and 1 <= peak_idx < len(samples) - 1:
-            y_m1 = samples[peak_idx - 1]
-            y_0 = samples[peak_idx]
-            y_p1 = samples[peak_idx + 1]
-            denom = 2.0 * (2.0 * y_0 - y_m1 - y_p1)
+        best_t = t_values[peak_idx]
+        best_t[valid_peak] += delta * interpolation_step
+    else:
+        best_t = t_values[peak_idx]
 
-            if abs(denom) > 1e-12:
-                delta = (y_m1 - y_p1) / denom
-                best_t = t_values[peak_idx] + delta * interpolation_step
-            else:
-                best_t = t_values[peak_idx]
-        else:
-            best_t = t_values[peak_idx]
-
-        refined[i, 0] = px + nx * best_t
-        refined[i, 1] = py + ny * best_t
+    refined[:, 0] = np.where(valid, px + nx * best_t, px)
+    refined[:, 1] = np.where(valid, py + ny * best_t, py)
 
     return refined
 
@@ -599,7 +618,9 @@ def _refine_contour_subpixel(
 # ────────────────────────────────────────────────────────────────
 
 def _compute_gradient_weights(
-    gray: np.ndarray, pts: np.ndarray,
+    gray: Optional[np.ndarray],
+    pts: np.ndarray,
+    cached_grad_mag: Optional[np.ndarray] = None,
 ) -> Optional[np.ndarray]:
     """Compute normalised gradient magnitudes at contour points.
 
@@ -608,20 +629,22 @@ def _compute_gradient_weights(
 
     Returns (N,) weights in [0.1, 1.0], or None on failure.
     """
-    if gray is None or len(pts) < 3:
+    if len(pts) < 3:
         return None
 
-    grad_x = cv2.Scharr(gray, cv2.CV_64F, 1, 0)
-    grad_y = cv2.Scharr(gray, cv2.CV_64F, 0, 1)
-    grad_mag = np.sqrt(grad_x ** 2 + grad_y ** 2)
+    if cached_grad_mag is not None:
+        grad_mag = cached_grad_mag
+    elif gray is not None:
+        gx = cv2.Scharr(gray, cv2.CV_32F, 1, 0)
+        gy = cv2.Scharr(gray, cv2.CV_32F, 0, 1)
+        grad_mag = cv2.magnitude(gx, gy)
+    else:
+        return None
 
-    h, w = gray.shape[:2]
-    weights = np.zeros(len(pts), dtype=np.float64)
-    for i in range(len(pts)):
-        ix = int(round(pts[i, 0]))
-        iy = int(round(pts[i, 1]))
-        if 0 <= iy < h and 0 <= ix < w:
-            weights[i] = grad_mag[iy, ix]
+    h, w = grad_mag.shape[:2]
+    ix = np.clip(np.round(pts[:, 0]).astype(int), 0, w - 1)
+    iy = np.clip(np.round(pts[:, 1]).astype(int), 0, h - 1)
+    weights = grad_mag[iy, ix].astype(np.float64)
 
     max_w = weights.max()
     if max_w > 0:
@@ -821,9 +844,15 @@ class SmartContourFitter:
                 or self._cache_gray_id != id(gray_image)
                 or self._cached_grad_mag.shape != gray_image.shape
             ):
-                self._cached_grad_mag, self._cached_grad_x, self._cached_grad_y = (
-                    _compute_multiscale_gradient(gray_image)
-                )
+                if self._subpixel_cfg.use_multiscale_gradient:
+                    self._cached_grad_mag, self._cached_grad_x, self._cached_grad_y = (
+                        _compute_multiscale_gradient(gray_image)
+                    )
+                else:
+                    gx = cv2.Scharr(gray_image, cv2.CV_32F, 1, 0)
+                    gy = cv2.Scharr(gray_image, cv2.CV_32F, 0, 1)
+                    mag = cv2.magnitude(gx, gy)
+                    self._cached_grad_mag, self._cached_grad_x, self._cached_grad_y = (mag, gx, gy)
                 self._cache_gray_id = id(gray_image)
 
         mask = binary_mask.copy()
@@ -846,6 +875,13 @@ class SmartContourFitter:
         if len(pts) < self.min_contour_points:
             return FitResult()
 
+        # Scale contour points to full image coordinates if mask is at model resolution
+        if gray_image is not None and mask.shape[:2] != gray_image.shape[:2]:
+            scale_y = gray_image.shape[0] / float(mask.shape[0])
+            scale_x = gray_image.shape[1] / float(mask.shape[1])
+            pts[:, 0] *= scale_x
+            pts[:, 1] *= scale_y
+
         if pupil_hint is not None and pupil_hint.valid:
             dx = pts[:, 0] - pupil_hint.center_x
             dy = pts[:, 1] - pupil_hint.center_y
@@ -860,6 +896,11 @@ class SmartContourFitter:
             # Apply filter if we keep enough points
             if np.sum(mask_pts) >= max(self.min_contour_points, int(len(pts) * 0.25)):
                 pts = pts[mask_pts]
+
+        # Uniformly subsample contour to max 120 points for optimal speed and robust fitting
+        if len(pts) > 120:
+            step = len(pts) // 120
+            pts = pts[::step]
 
         if self.subpixel_refine and gray_image is not None:
             sp = self._subpixel_cfg
@@ -948,7 +989,7 @@ class SmartContourFitter:
             and len(circle_inliers) >= 5
         ):
             weights = _compute_gradient_weights(
-                self._last_gray, circle_inliers
+                self._last_gray, circle_inliers, cached_grad_mag=self._cached_grad_mag
             )
             if weights is not None and len(weights) == len(circle_inliers):
                 weighted_fit = _fit_circle_weighted_taubin(
@@ -1039,7 +1080,8 @@ class SmartContourFitter:
 
         # ── Step 5: Quality and uncertainty ─────────────────────
         result.fit_quality = self._compute_quality(result)
-        self._compute_uncertainty(result, circle_inliers)
+        use_boot = getattr(self._subpixel_cfg, "bootstrap_uncertainty", False)
+        self._compute_uncertainty(result, circle_inliers, use_bootstrap=use_boot)
 
         return result
 
@@ -1115,19 +1157,15 @@ class SmartContourFitter:
         return min(1.0, max(0.0, score))
 
     @staticmethod
-    def _compute_uncertainty(result: FitResult, points: np.ndarray):
-        """Estimate centre and radius uncertainty (1σ) via bootstrap.
+    def _compute_uncertainty(
+        result: FitResult,
+        points: np.ndarray,
+        use_bootstrap: bool = False,
+    ):
+        """Estimate centre and radius uncertainty (1σ).
 
-        Resamples the contour points with replacement N times,
-        fits a Taubin circle on each sample, and computes the
-        standard deviation of the resulting centres and radii.
-
-        This gives realistic uncertainty estimates (~0.05 px at
-        100+ contour points) compared to the analytical
-        sigma/sqrt(n) approximation which is often optimistic.
-
-        Falls back to the analytical estimate if bootstrap fails
-        or produces too few valid samples.
+        When use_bootstrap is False (default), uses fast analytical
+        O(1) formula sigma / sqrt(n) which executes in <0.01ms.
         """
         if not result.valid or len(points) < 5:
             result.uncertainty_center_x = 99.0
@@ -1136,6 +1174,24 @@ class SmartContourFitter:
             return
 
         n = len(points)
+
+        # Fast analytical estimate (0.01ms vs 25ms bootstrap)
+        if not use_bootstrap:
+            if result.fit_type == FitType.CIRCLE:
+                residuals = _circle_residuals(
+                    points, result.center_x, result.center_y, result.radius
+                )
+            else:
+                residuals = _ellipse_residuals(
+                    points, result.center_x, result.center_y,
+                    result.semi_major, result.semi_minor,
+                    math.radians(result.angle_deg),
+                )
+            sigma = float(np.std(residuals)) if len(residuals) > 1 else 1.0
+            result.uncertainty_center_x = sigma / math.sqrt(n)
+            result.uncertainty_center_y = sigma / math.sqrt(n)
+            result.uncertainty_radius = sigma / math.sqrt(n) * math.sqrt(2)
+            return
 
         # Bootstrap resampling
         n_bootstrap = 50
