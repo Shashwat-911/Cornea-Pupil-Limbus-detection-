@@ -10,13 +10,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from pupil_tracking.pentacam.types import PentacamDetectionResult
-from pupil_tracking.iris.types import IrisDetectionResult
-from pupil_tracking.iris.correspondence import CorrespondenceResult
+if TYPE_CHECKING:
+    from pupil_tracking.iris.types import IrisDetectionResult
+    from pupil_tracking.iris.correspondence import CorrespondenceResult
 
 
 class RegistrationFailureKind(Enum):
@@ -42,6 +43,7 @@ class TransformationModel(Enum):
     SIMILARITY_2D = "SIMILARITY_2D"    # rotation + translation + uniform scale
     AFFINE_2D = "AFFINE_2D"            # full affine (6 parameters)
     NONE = "NONE"                       # no transformation estimated
+    ROTATION_ONLY = "ROTATION_ONLY"    # angular iris shift; no Cartesian transform fitted
 
 
 @dataclass
@@ -121,6 +123,7 @@ class CrossSystemRegistrationResult:
     pentacam_features_used: int = 0
     elita_features_used: int = 0
     processing_time_ms: float = 0.0
+    angular_diagnostics: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {
@@ -153,6 +156,7 @@ class CrossSystemRegistrationResult:
             "pentacam_features_used": self.pentacam_features_used,
             "elita_features_used": self.elita_features_used,
             "processing_time_ms": round(self.processing_time_ms, 2),
+            "angular_diagnostics": self.angular_diagnostics,
         }
         if self.transform_matrix is not None:
             d["transform_matrix"] = self.transform_matrix.tolist()

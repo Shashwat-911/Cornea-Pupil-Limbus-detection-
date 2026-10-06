@@ -24,6 +24,7 @@ from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
+from pupil_tracking.pentacam.sitting import ocular_viewport, valid_geometry
 
 from pupil_tracking.pentacam.types import (
     PentacamDetectionResult,
@@ -53,6 +54,7 @@ class PentacamIrisDetector:
         min_features: int = 6,
         inner_inset_frac: float = 0.10,
         outer_inset_frac: float = 0.08,
+        max_working_size: int = 640,
     ) -> None:
         self.num_angles = num_angles
         self.num_radii = num_radii
@@ -60,12 +62,14 @@ class PentacamIrisDetector:
         self.min_features = min_features
         self.inner_inset_frac = inner_inset_frac
         self.outer_inset_frac = outer_inset_frac
+        self.max_working_size = max_working_size
 
     def detect(
         self,
         image: np.ndarray,
         geometry: Optional[PentacamGeometry] = None,
         image_type: PentacamImageType = PentacamImageType.ANTERIOR_SEGMENT,
+        extract_features: bool = True,
     ) -> PentacamDetectionResult:
         """Detect iris structure and landmarks from a Pentacam image.
 
@@ -92,6 +96,8 @@ class PentacamIrisDetector:
                 failure_reason="Empty or null image input",
                 processing_time_ms=(time.perf_counter() - t0) * 1000.0,
             )
+        if image.dtype != np.uint8 or image.ndim not in (2, 3) or (image.ndim == 3 and image.shape[2] != 3):
+            raise ValueError("Expected uint8 grayscale or BGR image")
 
         # Convert to grayscale
         if len(image.shape) == 3:
@@ -100,6 +106,36 @@ class PentacamIrisDetector:
             gray = image.copy()
 
         h, w = gray.shape[:2]
+
+        # Process the ocular panel at bounded resolution, then map all geometry
+        # and descriptors back to original screenshot coordinates.
+        if geometry is None and max(h, w) > self.max_working_size > 0:
+            x, y, cw, ch = ocular_viewport(gray)
+            scale = min(1.0, self.max_working_size / max(cw, ch))
+            rw, rh = max(1, round(cw * scale)), max(1, round(ch * scale))
+            crop = cv2.resize(gray[y:y + ch, x:x + cw], (rw, rh), interpolation=cv2.INTER_AREA)
+            worker = PentacamIrisDetector(self.num_angles, self.num_radii, self.min_contrast,
+                                         self.min_features, self.inner_inset_frac,
+                                         self.outer_inset_frac, max_working_size=0)
+            result = worker.detect(crop, image_type=image_type, extract_features=extract_features)
+            # Resize dimensions can differ by <1 pixel. Use the actual ratios.
+            sx, sy = cw / rw, ch / rh
+            for ellipse in (result.geometry.pupil, result.geometry.limbus):
+                if ellipse is not None:
+                    ellipse.center_x = (ellipse.center_x + .5) * sx - .5 + x
+                    ellipse.center_y = (ellipse.center_y + .5) * sy - .5 + y
+                    ellipse.semi_major *= (sx + sy) / 2
+                    ellipse.semi_minor *= (sx + sy) / 2
+            for feature in result.feature_set.features:
+                feature.x = (feature.x + .5) * sx - .5 + x
+                feature.y = (feature.y + .5) * sy - .5 + y
+            if result.geometry.pupil is not None:
+                result.geometry.pupil_radius_px = result.geometry.pupil.radius
+            if result.geometry.limbus is not None:
+                result.geometry.limbus_radius_px = result.geometry.limbus.radius
+            result.image_width, result.image_height = w, h
+            result.processing_time_ms = (time.perf_counter() - t0) * 1000
+            return result
 
         # 1. Build UI / Overlay exclusion mask
         ui_mask = self._build_ui_mask(gray)
@@ -119,6 +155,20 @@ class PentacamIrisDetector:
             geom = detected_geom
         else:
             geom = geometry
+
+        if not valid_geometry(geom.pupil, geom.limbus, gray.shape):
+            return PentacamDetectionResult(status=PentacamDetectionStatus.DEGENERATE,
+                failure_reason="Invalid pupil/limbus geometry", image_width=w, image_height=h,
+                processing_time_ms=(time.perf_counter() - t0) * 1000)
+
+        if not extract_features:
+            # Current-frame angular registration validates texture itself; it
+            # does not consume these descriptors. Geometry-only is explicit.
+            return PentacamDetectionResult(valid=True, status=PentacamDetectionStatus.OK,
+                image_type=image_type, geometry=geom, image_width=w, image_height=h,
+                quality=PentacamQuality.MARGINAL,
+                confidence=min(geom.pupil.fit_quality, geom.limbus.fit_quality),
+                processing_time_ms=(time.perf_counter() - t0) * 1000)
 
         # 3. Extract iris annulus mask
         annulus_mask = self._build_annulus_mask(gray.shape, geom, ui_mask)
@@ -235,13 +285,15 @@ class PentacamIrisDetector:
             return None, "No valid ocular pixels outside UI"
 
         p15 = float(np.percentile(valid_pixels, 15))
-        pupil_bin = ((blurred < max(p15, 25.0)) & (ui_mask > 0)).astype(np.uint8) * 255
-
-        # Morphological close to bridge corneal glints
+        # Several dark thresholds prevent a low-contrast iris from joining the
+        # pupil while retaining pupils above an absolute camera black level.
         k_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
-        pupil_bin = cv2.morphologyEx(pupil_bin, cv2.MORPH_CLOSE, k_close)
-
-        contours, _ = cv2.findContours(pupil_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours = []
+        for threshold in sorted(set((20.0, 30.0, 40.0, max(p15, 25.0)))):
+            pupil_bin = ((blurred < threshold) & (ui_mask > 0)).astype(np.uint8) * 255
+            pupil_bin = cv2.morphologyEx(pupil_bin, cv2.MORPH_CLOSE, k_close)
+            found, _ = cv2.findContours(pupil_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            contours.extend(found)
         best_pupil = None
         best_score = -1.0
 
@@ -260,6 +312,8 @@ class PentacamIrisDetector:
             eccentricity = math.sqrt(max(0.0, 1.0 - (smin / (smaj + 1e-6)) ** 2))
             if eccentricity > 0.65:
                 continue  # Pupil should not be extremely oblong
+            if smaj > min(h, w) * .30 or abs(area / (math.pi * smaj * smin) - 1) > .20:
+                continue
 
             # Distance to image center
             center_dist = math.hypot(cx - w / 2.0, cy - h / 2.0)
@@ -273,52 +327,40 @@ class PentacamIrisDetector:
                     center_y=float(cy),
                     semi_major=float(smaj),
                     semi_minor=float(smin),
-                    angle_deg=float(angle),
+                    angle_deg=float((angle + (90 if d1 < d2 else 0)) % 180),
                     fit_quality=0.90,
                     eccentricity=float(eccentricity),
                     circularity=float(smin / smaj),
                 )
 
         if best_pupil is None:
-            # Fallback to central region circular estimation
-            cx, cy = w / 2.0, h / 2.0
-            pr = min(h, w) * 0.12
-            best_pupil = EllipseParams(
-                center_x=float(cx),
-                center_y=float(cy),
-                semi_major=float(pr),
-                semi_minor=float(pr),
-                angle_deg=0.0,
-                fit_quality=0.50,
-            )
+            return None, "No measured pupil contour"
 
         # 2. Limbus localization
         # Limbus is approximately concentric with pupil, with radius 2.2x to 3.5x pupil radius
         pcx, pcy = best_pupil.center_x, best_pupil.center_y
         pr = best_pupil.radius
 
-        min_limbus_r = pr * 2.0
-        max_limbus_r = min(pr * 3.8, min(pcx, w - pcx, pcy, h - pcy) * 0.95)
+        min_limbus_r = max(pr * 1.45, min(h, w) * .25)
+        max_limbus_r = min(min(pcx, w - pcx) * .95, min(h, w) * .57)
 
         if min_limbus_r >= max_limbus_r:
-            limbus_r = min_limbus_r
+            return None, "Insufficient image extent for limbus"
         else:
             # Radial derivative search around pupil center
-            n_angles = 36
-            test_angles = np.linspace(0, 2 * np.pi, n_angles, endpoint=False)
-            r_samples = np.linspace(min_limbus_r, max_limbus_r, 40)
-
-            radial_grads = []
-            for r in r_samples:
-                xs = np.clip(np.round(pcx + r * np.cos(test_angles)).astype(int), 0, w - 1)
-                ys = np.clip(np.round(pcy + r * np.sin(test_angles)).astype(int), 0, h - 1)
-                vals = blurred[ys, xs]
-                radial_grads.append(np.mean(vals))
-
-            radial_grads = np.array(radial_grads)
-            # Limbus transition from iris to sclera is an increase in brightness
-            diffs = np.gradient(radial_grads)
-            best_r_idx = int(np.argmax(diffs))
+            # Lateral arcs are less occluded by eyelids than superior/inferior
+            # arcs. The median rejects localized crypts and thin overlay lines.
+            a = np.linspace(-.60, .60, 40)
+            test_angles = np.concatenate((a, a + np.pi))
+            r_samples = np.linspace(min_limbus_r, max_limbus_r, 128)
+            xs = (pcx + r_samples[:, None] * np.cos(test_angles)).astype(np.float32)
+            ys = (pcy + r_samples[:, None] * np.sin(test_angles)).astype(np.float32)
+            samples = cv2.remap(blurred.astype(np.float32), xs, ys, cv2.INTER_LINEAR)
+            samples = cv2.GaussianBlur(samples, (1, 9), 0)
+            diffs = np.median(np.gradient(samples, axis=0), axis=1)
+            best_r_idx = int(np.argmax(diffs[2:-2])) + 2
+            if diffs[best_r_idx] < .12:
+                return None, "No supported limbus intensity transition"
             limbus_r = float(r_samples[best_r_idx])
 
         best_limbus = EllipseParams(
@@ -425,80 +467,48 @@ class PentacamIrisDetector:
         p90 = float(np.percentile(iris_pixels, 90))
         iris_contrast_span = max(p90 - p10, 10.0)
 
-        accepted_features: List[PentacamFeature] = []
-        num_candidates = 0
-
-        angles_deg = np.linspace(0.0, 360.0, self.num_angles, endpoint=False)
-        rad_norms = np.linspace(0.15, 0.85, self.num_radii)
-
-        for a_deg in angles_deg:
-            a_rad = math.radians(a_deg)
-            cos_a = math.cos(a_rad)
-            sin_a = math.sin(a_rad)
-
-            # Limbus and pupil radius at this angle
-            r_pupil = pe.radius
-            r_limbus = le.radius
-
-            for r_norm in rad_norms:
-                num_candidates += 1
-
-                # Radial coordinate interpolation
-                r_px = r_pupil + r_norm * (r_limbus - r_pupil)
-                # Center shifts linearly from pupil to limbus center
-                cx = pcx + r_norm * (lcx - pcx)
-                cy = pcy + r_norm * (lcy - pcy)
-
-                fx = cx + r_px * cos_a
-                fy = cy + r_px * sin_a
-
-                ix = int(round(fx))
-                iy = int(round(fy))
-
-                if not (0 <= ix < w and 0 <= iy < h):
-                    continue
-
-                if annulus_mask[iy, ix] == 0:
-                    continue
-
-                # Local patch analysis (7x7)
-                half_patch = 3
-                if not (half_patch <= ix < w - half_patch and half_patch <= iy < h - half_patch):
-                    continue
-
-                patch = enhanced[iy - half_patch:iy + half_patch + 1, ix - half_patch:ix + half_patch + 1]
-                patch_lap = abs_lap[iy - half_patch:iy + half_patch + 1, ix - half_patch:ix + half_patch + 1]
-
-                mean_lap = float(np.mean(patch_lap))
-                local_std = float(np.std(patch))
-
-                if mean_lap < self.min_contrast or local_std < (self.min_contrast * 0.7):
-                    continue
-
-                # 16-bin normalized gradient orientation descriptor (contrast-invariant)
-                p_mag = mag_full[iy - half_patch:iy + half_patch + 1, ix - half_patch:ix + half_patch + 1]
-                p_ori = ori_full[iy - half_patch:iy + half_patch + 1, ix - half_patch:ix + half_patch + 1]
-
-                hist, _ = np.histogram(p_ori, bins=16, range=(0.0, 360.0), weights=p_mag)
-                hist_norm = hist / (np.linalg.norm(hist) + 1e-7)
-
-                confidence = float(np.clip(
-                    (mean_lap / 20.0) * 0.5 + (local_std / iris_contrast_span) * 0.5,
-                    0.1, 1.0,
-                ))
-
-                feat = PentacamFeature(
-                    id=len(accepted_features),
-                    x=float(fx),
-                    y=float(fy),
-                    angle_deg=float(a_deg),
-                    radial_norm=float(r_norm),
-                    response=float(mean_lap),
-                    confidence=confidence,
-                    valid=True,
-                    descriptor=hist_norm.astype(np.float32),
-                )
-                accepted_features.append(feat)
+        # Gather all lattice patches in one batch. Avoid hundreds of Python
+        # calls to std/mean/histogram per reference or live frame.
+        angles = np.repeat(np.linspace(0, 360, self.num_angles, endpoint=False), self.num_radii)
+        radial = np.tile(np.linspace(self.inner_inset_frac, 1 - self.outer_inset_frac,
+                                     self.num_radii), self.num_angles)
+        radians = np.deg2rad(angles)
+        def radii(e):
+            t = radians - np.deg2rad(e.angle_deg)
+            return e.semi_major * e.semi_minor / np.sqrt(
+                (e.semi_minor * np.cos(t)) ** 2 + (e.semi_major * np.sin(t)) ** 2)
+        rr = radii(pe) * (1 - radial) + radii(le) * radial
+        fx = pcx + radial * (lcx - pcx) + rr * np.cos(radians)
+        fy = pcy + radial * (lcy - pcy) + rr * np.sin(radians)
+        ix, iy = np.rint(fx).astype(int), np.rint(fy).astype(int)
+        inside = (ix >= 3) & (iy >= 3) & (ix < w - 3) & (iy < h - 3)
+        indices = np.flatnonzero(inside)
+        indices = indices[annulus_mask[iy[indices], ix[indices]] > 0]
+        num_candidates = len(angles)
+        accepted_features = []
+        if len(indices):
+            dy, dx = np.mgrid[-3:4, -3:4]
+            xx = ix[indices, None] + dx.ravel()
+            yy = iy[indices, None] + dy.ravel()
+            patches = enhanced[yy, xx]
+            mean_lap = abs_lap[yy, xx].mean(axis=1)
+            local_std = patches.std(axis=1)
+            keep = (mean_lap >= self.min_contrast) & (local_std >= self.min_contrast * .7)
+            # Reject patches that straddle glints, UI or annulus boundaries.
+            keep &= (annulus_mask[yy, xx] > 0).mean(axis=1) >= .85
+            bins = np.minimum((ori_full[yy, xx] / 22.5).astype(np.int32), 15)
+            bins += np.arange(len(indices))[:, None] * 16
+            hist = np.bincount(bins.ravel(), weights=mag_full[yy, xx].ravel(),
+                               minlength=len(indices) * 16).reshape(-1, 16)
+            hist /= np.linalg.norm(hist, axis=1, keepdims=True) + 1e-7
+            confidence = np.clip(mean_lap / 40 + local_std / (2 * iris_contrast_span), .1, 1)
+            for j in np.flatnonzero(keep):
+                i = indices[j]
+                accepted_features.append(PentacamFeature(
+                    id=len(accepted_features), x=float(fx[i]), y=float(fy[i]),
+                    angle_deg=float(angles[i]), radial_norm=float(radial[i]),
+                    response=float(mean_lap[j]), confidence=float(confidence[j]),
+                    valid=True, descriptor=hist[j].astype(np.float32)))
 
         # Compute coverage metrics
         metrics = self._compute_coverage_metrics(accepted_features)

@@ -1,5 +1,23 @@
 # Pupil & Limbus Detector — Medevplus IXcentai (Surgical Grade)
 
+## Seated / Pentacam CPU workflow
+
+The `sitting-position` branch adds screenshot-aware pupil/limbus detection,
+masked iris registration with rejection of ambiguous matches, and a bounded
+CPU session. Install with `pip install -r requirements-sitting.txt`; no GPU,
+PyTorch, model weights, or external service is required for this workflow.
+
+```powershell
+python -m scripts.register_sitting reference.bmp current.bmp --eye-id eye_001 --laterality OD
+```
+
+Use confirmed images of the **same eye**. A single screenshot cannot establish
+cyclotorsion. The command is for two seated images; the Python session also
+accepts existing ELITA detections. See [usage and validation](docs/SITTING_POSITION.md)
+for the API, benchmarks, limitations, and required clinical validation. This
+addition has **not** established clinical or J&J acceptance, and is not wired
+to treatment control or the existing GUI's live camera path.
+
 A deep-learning + classical-computer-vision system that detects and measures the
 **pupil** (dark central aperture) and the **limbus** (iris–sclera boundary) in eye
 images and video. It reports geometry in pixels and millimetres, tracks smoothly

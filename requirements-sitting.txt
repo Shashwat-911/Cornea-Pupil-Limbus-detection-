@@ -1,0 +1,4 @@
+# CPU-only seated detection/registration; no torch, ONNX, GPU or weights.
+numpy>=1.26,<3
+opencv-python>=4.8,<5
+# Development tests: pip install pytest

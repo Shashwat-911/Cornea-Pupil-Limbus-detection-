@@ -24,6 +24,7 @@ from pupil_tracking.pentacam.cross_system import (
 )
 from pupil_tracking.pentacam.detector import PentacamIrisDetector
 from pupil_tracking.pentacam.cross_registration import CrossModalityRegistrationEngine
+from pupil_tracking.pentacam.session import SittingRegistrationSession
 
 __all__ = [
     "PentacamDetectionResult",
@@ -39,4 +40,5 @@ __all__ = [
     "TransformationModel",
     "PentacamIrisDetector",
     "CrossModalityRegistrationEngine",
+    "SittingRegistrationSession",
 ]

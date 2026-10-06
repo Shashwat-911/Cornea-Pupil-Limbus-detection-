@@ -486,9 +486,8 @@ def _refine_contour_subpixel(
         4. 0.25-pixel sampling step (4x finer than 1.0)
         5. Parabolic peak fitting for true sub-pixel localization
 
-    Achieves ~0.05 pixel localization accuracy, compared to ~0.5
-    pixels with the basic approach.  At 40 px/mm calibration,
-    this equates to ~0.001 mm vs ~0.012 mm.
+    Subpixel sampling resolution is not a boundary-accuracy guarantee;
+    localization accuracy depends on image quality and boundary ground truth.
 
     Parameters
     ----------
@@ -516,6 +515,8 @@ def _refine_contour_subpixel(
     np.ndarray
         (N, 2) refined contour points (float64).
     """
+    if search_radius < 0 or interpolation_step <= 0:
+        raise ValueError("search_radius must be nonnegative and interpolation_step positive")
     h, w = image_gray.shape[:2]
     refined = contour.copy().astype(np.float64)
 
@@ -536,60 +537,48 @@ def _refine_contour_subpixel(
     n_steps = int(search_radius / interpolation_step)
     t_values = np.arange(-n_steps, n_steps + 1) * interpolation_step
 
-    for i in range(len(contour)):
-        px, py = contour[i]
-        ix, iy = int(round(px)), int(round(py))
-
-        if not (1 <= iy < h - 1 and 1 <= ix < w - 1):
-            continue
-
-        gx = grad_x[iy, ix]
-        gy = grad_y[iy, ix]
-        g_len = math.sqrt(gx ** 2 + gy ** 2)
-
-        if g_len < 1e-6:
-            continue
-
-        nx, ny = gx / g_len, gy / g_len
-
-        # Sample gradient magnitude along normal with bilinear interpolation
-        samples = np.zeros(len(t_values))
-        for j, t in enumerate(t_values):
-            sx = px + nx * t
-            sy = py + ny * t
-
-            if not (0 <= sx < w - 1 and 0 <= sy < h - 1):
-                continue
-
-            # Bilinear interpolation
-            x0, y0 = int(sx), int(sy)
-            fx, fy = sx - x0, sy - y0
-            samples[j] = (
-                grad_mag[y0, x0] * (1.0 - fx) * (1.0 - fy)
-                + grad_mag[y0, x0 + 1] * fx * (1.0 - fy)
-                + grad_mag[y0 + 1, x0] * (1.0 - fx) * fy
-                + grad_mag[y0 + 1, x0 + 1] * fx * fy
-            )
-
-        # Find peak
-        peak_idx = int(np.argmax(samples))
-
-        if use_parabolic and 1 <= peak_idx < len(samples) - 1:
-            y_m1 = samples[peak_idx - 1]
-            y_0 = samples[peak_idx]
-            y_p1 = samples[peak_idx + 1]
-            denom = 2.0 * (2.0 * y_0 - y_m1 - y_p1)
-
-            if abs(denom) > 1e-12:
-                delta = (y_m1 - y_p1) / denom
-                best_t = t_values[peak_idx] + delta * interpolation_step
-            else:
-                best_t = t_values[peak_idx]
-        else:
-            best_t = t_values[peak_idx]
-
-        refined[i, 0] = px + nx * best_t
-        refined[i, 1] = py + ny * best_t
+    if not len(refined):
+        return refined
+    # Batch exact bilinear interpolation without dropping contour points.
+    # This preserves float64 samples and the scalar boundary convention.
+    ix = np.rint(refined[:, 0]).astype(np.int64)
+    iy = np.rint(refined[:, 1]).astype(np.int64)
+    inside = (ix >= 1) & (ix < w - 1) & (iy >= 1) & (iy < h - 1)
+    indices = np.flatnonzero(inside)
+    gx, gy = grad_x[iy[indices], ix[indices]], grad_y[iy[indices], ix[indices]]
+    length = np.hypot(gx, gy)
+    usable = length >= 1e-6
+    indices, gx, gy, length = indices[usable], gx[usable], gy[usable], length[usable]
+    if not len(indices):
+        return refined
+    nx, ny = gx / length, gy / length
+    # Bound temporary memory on unusually long contours.
+    for offset in range(0, len(indices), 4096):
+        ids = indices[offset:offset + 4096]
+        dx, dy = nx[offset:offset + 4096], ny[offset:offset + 4096]
+        sx = refined[ids, 0, None] + dx[:, None] * t_values
+        sy = refined[ids, 1, None] + dy[:, None] * t_values
+        valid_samples = (sx >= 0) & (sx < w - 1) & (sy >= 0) & (sy < h - 1)
+        x0 = np.clip(sx.astype(np.int64), 0, w - 2)
+        y0 = np.clip(sy.astype(np.int64), 0, h - 2)
+        fx, fy = sx - x0, sy - y0
+        samples = (grad_mag[y0, x0] * (1 - fx) * (1 - fy)
+                   + grad_mag[y0, x0 + 1] * fx * (1 - fy)
+                   + grad_mag[y0 + 1, x0] * (1 - fx) * fy
+                   + grad_mag[y0 + 1, x0 + 1] * fx * fy)
+        samples[~valid_samples] = 0
+        peak = np.argmax(samples, axis=1)
+        best_t = t_values[peak].copy()
+        if use_parabolic and len(t_values) >= 3:
+            rows = np.flatnonzero((peak > 0) & (peak < len(t_values) - 1))
+            center = peak[rows]
+            left, mid, right = samples[rows, center-1], samples[rows, center], samples[rows, center+1]
+            denominator = 2 * (left - 2 * mid + right)
+            delta = np.divide(left - right, denominator, out=np.zeros_like(left),
+                              where=np.abs(denominator) > 1e-12)
+            best_t[rows] += np.clip(delta, -.5, .5) * interpolation_step
+        refined[ids, 0] += dx * best_t
+        refined[ids, 1] += dy * best_t
 
     return refined
 

@@ -113,6 +113,17 @@ class TestVectorizedSubpixel:
         # Edge at x=320 should be refined to sub-pixel location
         assert result.shape == (1, 2)
 
+    def test_parabolic_peak_moves_toward_known_maximum(self):
+        """Catch a reversed interpolation sign using a known quadratic peak."""
+        gray = np.zeros((32, 32), dtype=np.uint8)
+        _, x = np.mgrid[:32, :32]
+        magnitude = 100.0 - (x - 10.25) ** 2
+        result = _refine_contour_subpixel(
+            gray, np.array([[10.0, 16.0]]), interpolation_step=1.0,
+            cached_grad_mag=magnitude,
+            cached_grad_x=np.ones_like(magnitude), cached_grad_y=np.zeros_like(magnitude))
+        np.testing.assert_allclose(result, [[10.25, 16.0]], atol=1e-10)
+
     def test_no_parabolic(self):
         """Without parabolic, result should use peak sample directly."""
         gray = np.random.randint(0, 256, (480, 640), dtype=np.uint8)

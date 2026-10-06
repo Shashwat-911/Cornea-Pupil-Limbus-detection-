@@ -74,3 +74,11 @@ csharp/**/obj/
 csharp/**/*.user
 csharp/**/publish/
 .vs/
+
+# Local patient screenshots and seated-data archive (never publish).
+/*_Iris Image.BMP
+/WhatsApp Image *.jpeg
+/sitting *.jpeg
+/sitting data
+/sitting data.zip
+/scratch/
