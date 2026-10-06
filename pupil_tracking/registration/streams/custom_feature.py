@@ -158,7 +158,7 @@ class CustomFeatureStream(BaseStream):
             pts_curr[:, 0] - crop_center[0],
         )
 
-        diffs = (angles_curr - angles_ref + np.pi) % (2 * np.pi) - np.pi
+        diffs = (angles_ref - angles_curr + np.pi) % (2 * np.pi) - np.pi
 
         # Robust median + MAD
         median_diff = np.median(diffs)

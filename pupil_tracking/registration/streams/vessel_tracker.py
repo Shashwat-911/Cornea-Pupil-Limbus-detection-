@@ -107,10 +107,10 @@ class VesselTrackerStream(BaseStream):
                            "matched": len(matches)}
             )
 
-        # Compute angular differences
+        # Compute angular differences (angles_ref - angles_curr for CCW positive)
         diffs = []
         for ri, ci in matches:
-            diff = (angles_curr[ci] - angles_ref[ri] + np.pi) % (2 * np.pi) - np.pi
+            diff = (angles_ref[ri] - angles_curr[ci] + np.pi) % (2 * np.pi) - np.pi
             diffs.append(diff)
         diffs = np.array(diffs)
 

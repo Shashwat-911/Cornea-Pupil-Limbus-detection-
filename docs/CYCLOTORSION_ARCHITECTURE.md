@@ -70,6 +70,14 @@ consumes validated geometry and can be disabled without changing centration.
 The ink-marker stream remains available as a separate fallback/verification
 stream and does not alter the iris registration result.
 
+The four controls (master cyclotorsion, iris features, ink markers, and phase
+correlation) are persisted in the local application settings file and restored
+when the GUI reopens. Disabled modules are not executed by the registration
+engine. `scripts/static_cyclotorsion_review.py` creates the requested static
+review artifact: side-by-side unwrapped strips, angle, confidence, diagnostics,
+and a JSON record marked `doctor_validation: PENDING`. The operator validates
+the result before any treatment-axis action.
+
 The detector API is intentionally small so a later model can replace only the
 feature proposal stage:
 

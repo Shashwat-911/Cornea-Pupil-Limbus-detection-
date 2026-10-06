@@ -201,6 +201,7 @@ class PupilTrackingGUI:
         # persists between launches; a patient must be selected before a
         # clinical recording is allowed.
         self._storage_settings_path = Path.home() / "AppData" / "Local" / "MedevplusIXcentai" / "settings.txt"
+        self._persistent_feature_settings: Dict[str, str] = {}
         self._storage_root_var = tk.StringVar(value=str(Path.home() / "Desktop" / "Centration"))
         self._patient_id_var = tk.StringVar(value="")
         self._patient_name_var = tk.StringVar(value="")
@@ -280,17 +281,22 @@ class PupilTrackingGUI:
 
         # ── Cyclotorsion & Iris Registration Component Toggles ──
         reg_cfg = getattr(self.cfg, "registration", None)
+        stored = self._persistent_feature_settings
+        def stored_bool(name: str, default: bool) -> bool:
+            value = stored.get(name)
+            return default if value is None else value.strip().lower() in ("1", "true", "yes", "on")
+
         self._enable_registration_var = tk.BooleanVar(
-            value=getattr(reg_cfg, "enabled", True) if reg_cfg else True
+            value=stored_bool("cyclotorsion_enabled", getattr(reg_cfg, "enabled", True) if reg_cfg else True)
         )
         self._enable_iris_features_var = tk.BooleanVar(
-            value=getattr(reg_cfg, "enable_iris_features", True) if reg_cfg else True
+            value=stored_bool("iris_features_enabled", getattr(reg_cfg, "enable_iris_features", True) if reg_cfg else True)
         )
         self._enable_ink_tracker_var = tk.BooleanVar(
-            value=getattr(reg_cfg, "enable_ink_tracker", True) if reg_cfg else True
+            value=stored_bool("ink_marker_enabled", getattr(reg_cfg, "enable_ink_tracker", True) if reg_cfg else True)
         )
         self._enable_poc_var = tk.BooleanVar(
-            value=getattr(reg_cfg, "enable_phase_correlation", True) if reg_cfg else True
+            value=stored_bool("phase_correlation_enabled", getattr(reg_cfg, "enable_phase_correlation", True) if reg_cfg else True)
         )
         _init_status = (
             "Mode: Centration + Registration"
@@ -481,11 +487,13 @@ class PupilTrackingGUI:
         try:
             if self._storage_settings_path.exists():
                 for line in self._storage_settings_path.read_text(encoding="utf-8").splitlines():
-                    if line.startswith("data_storage_root="):
-                        root = line.split("=", 1)[1].strip()
-                        if root:
-                            self._storage_root_var.set(root)
-                        break
+                    if "=" not in line or line.lstrip().startswith("#"):
+                        continue
+                    key, value = line.split("=", 1)
+                    value = value.strip()
+                    self._persistent_feature_settings[key.strip()] = value
+                    if key.strip() == "data_storage_root" and value:
+                        self._storage_root_var.set(value)
         except (OSError, UnicodeError) as exc:
             self.logger.warning("Could not load storage settings: %s", exc)
 
@@ -499,10 +507,19 @@ class PupilTrackingGUI:
             root.mkdir(parents=True, exist_ok=True)
             self._storage_root_var.set(str(root))
             self._storage_settings_path.parent.mkdir(parents=True, exist_ok=True)
+            settings = {
+                "data_storage_root": str(root),
+                "cyclotorsion_enabled": str(int(self._enable_registration_var.get())) if hasattr(self, "_enable_registration_var") else "1",
+                "iris_features_enabled": str(int(self._enable_iris_features_var.get())) if hasattr(self, "_enable_iris_features_var") else "1",
+                "ink_marker_enabled": str(int(self._enable_ink_tracker_var.get())) if hasattr(self, "_enable_ink_tracker_var") else "1",
+                "phase_correlation_enabled": str(int(self._enable_poc_var.get())) if hasattr(self, "_enable_poc_var") else "1",
+            }
             self._storage_settings_path.write_text(
-                f"# Medevplus IXcentai - Settings\ndata_storage_root={root}\n",
+                "# Medevplus IXcentai - Settings\n" +
+                "\n".join(f"{key}={value}" for key, value in settings.items()) + "\n",
                 encoding="utf-8",
             )
+            self._persistent_feature_settings.update(settings)
             self._status_var.set(f"Patient data location saved → {root}")
             return True
         except OSError as exc:
@@ -2567,6 +2584,9 @@ class PupilTrackingGUI:
 
             if hasattr(self, "_reg_settings_status"):
                 self._reg_settings_status.set(status_desc)
+            # Persist the independent controls so reopening the application
+            # restores the doctor's chosen operating mode.
+            self._save_storage_settings()
 
         if self._tracker is not None and not self._video_running:
             self._tracker = EyeKalmanTracker(config=self.cfg)

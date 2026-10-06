@@ -135,7 +135,7 @@ def run_image_demo(image_path: Path, test_angle: float = 3.0, headless: bool = F
     print("CYCLOTORSION DETECTION RESULT:")
     print(f"  Ground-Truth Applied Rotation: {test_angle:+.2f}°")
     print(f"  Detected Cyclotorsion Angle:   {reg_res.torsion_deg:+.2f}°")
-    print(f"  Angular Absolute Error:       {abs(abs(reg_res.torsion_deg) - abs(test_angle)):.4f}°")
+    print(f"  Angular Absolute Error:       {abs(reg_res.torsion_deg - test_angle):.4f}°")
     print(f"  Tracking Confidence:           {reg_res.confidence:.1%}")
     print(f"  Clinical Safety Rating:        {reg_res.quality.value}")
     print("=" * 55 + "\n")

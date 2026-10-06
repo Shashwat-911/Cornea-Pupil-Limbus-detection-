@@ -378,10 +378,32 @@ def process_image(
     # ==============================================================
     # END DISPLAY PATCH 2
     # ==============================================================
-    cv2.imshow("Detection Result", annotated)
-    print("\n  Press any key to close the window…\n")
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    out_path = getattr(args, "output", None)
+    if out_path:
+        out_p = Path(out_path)
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        cv2.imwrite(str(out_p), annotated)
+        print(f"\n  Saved detection result to: {out_p}")
+
+    is_headless = getattr(args, "headless", False)
+    if not is_headless:
+        try:
+            cv2.imshow("Detection Result", annotated)
+            print("\n  Press any key to close the window…\n")
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+        except cv2.error:
+            if not out_path:
+                default_out = Path("output/detection_result.jpg")
+                default_out.parent.mkdir(parents=True, exist_ok=True)
+                cv2.imwrite(str(default_out), annotated)
+                print(f"\n  [INFO] No display available. Saved result to: {default_out}")
+    else:
+        if not out_path:
+            default_out = Path("output/detection_result.jpg")
+            default_out.parent.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(str(default_out), annotated)
+            print(f"\n  [INFO] Headless mode: Saved result to: {default_out}")
 
 
 # ================================================================
@@ -1646,6 +1668,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="PATH",
         help="Output file path",
+    )
+    io_group.add_argument(
+        "--headless",
+        action="store_true",
+        default=False,
+        help="Run without displaying GUI/window (save output to file instead)",
     )
     io_group.add_argument(
         "--model",

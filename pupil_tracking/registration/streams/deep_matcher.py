@@ -146,8 +146,9 @@ class DeepMatcherStream(BaseStream):
             pts_curr[:, 0] - crop_center[0],
         )
 
-        # Angular differences
-        diffs = (angles_curr - angles_ref + np.pi) % (2 * np.pi) - np.pi
+        # Angular differences (angles_ref - angles_curr accounts for image y-axis downward orientation,
+        # ensuring positive angle corresponds to counter-clockwise cyclotorsion)
+        diffs = (angles_ref - angles_curr + np.pi) % (2 * np.pi) - np.pi
 
         # RANSAC-style robust estimation
         torsion_rad, inlier_mask = self._robust_rotation_estimate(diffs)

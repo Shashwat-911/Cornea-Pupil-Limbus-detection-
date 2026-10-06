@@ -164,10 +164,8 @@ def run_cyclotorsion_sweep(detector: UnifiedDetector, engine: RegistrationEngine
             res_full = engine.register(img_ref, img_rot, det_ref, det_rot)
             t_full = (time.perf_counter() - t0) * 1000.0
 
-            # OpenCV image rotation is positive counter-clockwise, while the
-            # legacy RegistrationEngine reports the clinical opposite direction.
-            # Keep the raw value and evaluate the documented clinical convention.
-            clinical_angle = -float(res_full.torsion_deg) if res_full.valid else None
+            # RegistrationEngine directly reports counter-clockwise positive cyclotorsion
+            clinical_angle = float(res_full.torsion_deg) if res_full.valid else None
             err = abs(clinical_angle - target_deg) if clinical_angle is not None else None
             within_cutoff = bool(err is not None and err <= 1.5)
             angle_text = f"{clinical_angle:+6.2f}°" if clinical_angle is not None else "ABSTAIN"

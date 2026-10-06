@@ -717,6 +717,10 @@ class UnifiedDetector:
             result.overall_confidence = float(np.mean(confs))
         result.overall_quality = assign_quality_grade(result.overall_confidence)
 
+        result.metadata.image_height = int(image.shape[0])
+        result.metadata.image_width = int(image.shape[1])
+        result.metadata.source = source
+        result.metadata.frame_number = frame_number
         result.metadata.processing_time_ms = (time.time() - t0) * 1000.0
 
         self.logger.debug(
@@ -2403,9 +2407,12 @@ class _ONNXEngineWrapper:
 
         # Build an EyeDetectionResult with raw mask for downstream fitting
         result = EyeDetectionResult()
-        result.metadata = FrameMetadata()
-        result.metadata.frame_number = frame_number
-        result.metadata.source = source
+        result.metadata = FrameMetadata(
+            frame_number=frame_number,
+            source=source,
+            image_height=int(image.shape[0]),
+            image_width=int(image.shape[1]),
+        )
 
         # Build integer label mask: 0=bg, 1=pupil, 2=iris
         h, w = image.shape[:2]
@@ -2484,8 +2491,11 @@ class _DummyEngine:
 
     def detect(self, image: np.ndarray, **kwargs) -> "EyeDetectionResult":
         result = EyeDetectionResult()
-        result.metadata = FrameMetadata()
         h, w = image.shape[:2]
+        result.metadata = FrameMetadata(
+            image_height=int(h),
+            image_width=int(w),
+        )
         result._raw_mask = np.zeros((h, w), dtype=np.uint8)
         return result
 
