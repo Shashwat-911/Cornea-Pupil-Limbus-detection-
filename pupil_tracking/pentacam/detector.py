@@ -5,7 +5,7 @@ anterior segment and Scheimpflug eye imagery:
     1. Rejects Pentacam UI chrome, overlays, reticles, and annotation text.
     2. Localizes anatomical pupil and limbus boundaries.
     3. Normalizes iris stroma between pupil and limbus.
-    4. Detects distinctive iris landmarks (crypts, collarette, furrows, pigment spots).
+    4. Detects spatially separated texture keypoints, not verified anatomical labels.
     5. Extracts contrast-invariant multi-scale descriptors for cross-modality matching.
 
 Implementation goals (not clinical validation):
@@ -24,7 +24,8 @@ from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
-from pupil_tracking.pentacam.sitting import ocular_viewport, valid_geometry
+from pupil_tracking.pentacam.sitting import ocular_viewport, valid_geometry, registration_mask
+from pupil_tracking.pentacam.refinement import refine_limbus, anatomy_candidates
 
 from pupil_tracking.pentacam.types import (
     PentacamDetectionResult,
@@ -70,6 +71,8 @@ class PentacamIrisDetector:
         geometry: Optional[PentacamGeometry] = None,
         image_type: PentacamImageType = PentacamImageType.ANTERIOR_SEGMENT,
         extract_features: bool = True,
+        review_anatomy: bool = False,
+        refine_boundary: bool = True,
     ) -> PentacamDetectionResult:
         """Detect iris structure and landmarks from a Pentacam image.
 
@@ -113,22 +116,28 @@ class PentacamIrisDetector:
             x, y, cw, ch = ocular_viewport(gray)
             scale = min(1.0, self.max_working_size / max(cw, ch))
             rw, rh = max(1, round(cw * scale)), max(1, round(ch * scale))
-            crop = cv2.resize(gray[y:y + ch, x:x + cw], (rw, rh), interpolation=cv2.INTER_AREA)
+            crop = cv2.resize(image[y:y + ch, x:x + cw], (rw, rh), interpolation=cv2.INTER_AREA)
             worker = PentacamIrisDetector(self.num_angles, self.num_radii, self.min_contrast,
                                          self.min_features, self.inner_inset_frac,
                                          self.outer_inset_frac, max_working_size=0)
-            result = worker.detect(crop, image_type=image_type, extract_features=extract_features)
+            result = worker.detect(crop, image_type=image_type, extract_features=extract_features,
+                                   review_anatomy=review_anatomy, refine_boundary=refine_boundary)
             # Resize dimensions can differ by <1 pixel. Use the actual ratios.
             sx, sy = cw / rw, ch / rh
-            for ellipse in (result.geometry.pupil, result.geometry.limbus):
+            for ellipse in (result.geometry.pupil, result.geometry.limbus, result.geometry.refined_limbus):
                 if ellipse is not None:
                     ellipse.center_x = (ellipse.center_x + .5) * sx - .5 + x
                     ellipse.center_y = (ellipse.center_y + .5) * sy - .5 + y
                     ellipse.semi_major *= (sx + sy) / 2
                     ellipse.semi_minor *= (sx + sy) / 2
-            for feature in result.feature_set.features:
+            for feature in result.feature_set.features + result.anatomy_candidates:
                 feature.x = (feature.x + .5) * sx - .5 + x
                 feature.y = (feature.y + .5) * sy - .5 + y
+            result.geometry.limbus_support_points = [
+                ((px + .5) * sx - .5 + x, (py + .5) * sy - .5 + y)
+                for px, py in result.geometry.limbus_support_points]
+            if result.geometry.limbus_fit_residual_px is not None:
+                result.geometry.limbus_fit_residual_px *= (sx + sy) / 2
             if result.geometry.pupil is not None:
                 result.geometry.pupil_radius_px = result.geometry.pupil.radius
             if result.geometry.limbus is not None:
@@ -139,10 +148,16 @@ class PentacamIrisDetector:
 
         # 1. Build UI / Overlay exclusion mask
         ui_mask = self._build_ui_mask(gray)
+        if image.ndim == 3:
+            blue, green, red = cv2.split(image)
+            high = cv2.max(cv2.max(blue, green), red)
+            low = cv2.min(cv2.min(blue, green), red)
+            vivid = ((cv2.subtract(high, low) > 90) & (high > 170)).astype(np.uint8)
+            ui_mask[cv2.dilate(vivid, np.ones((5, 5), np.uint8)) > 0] = 0
 
         # 2. Localize or validate pupil and limbus
         if geometry is None or not (geometry.pupil_detected and geometry.limbus_detected):
-            detected_geom, geom_err = self._localize_geometry(gray, ui_mask)
+            detected_geom, geom_err = self._localize_geometry(gray, ui_mask, refine_boundary)
             if detected_geom is None:
                 return PentacamDetectionResult(
                     valid=False,
@@ -172,6 +187,7 @@ class PentacamIrisDetector:
 
         # 3. Extract iris annulus mask
         annulus_mask = self._build_annulus_mask(gray.shape, geom, ui_mask)
+        annulus_mask = cv2.bitwise_and(annulus_mask, registration_mask(image))
 
         # 4. Detect distinctive iris landmarks inside the annulus
         features, feature_metrics = self._extract_features(gray, geom, annulus_mask)
@@ -207,6 +223,7 @@ class PentacamIrisDetector:
             largest_angular_gap_deg=feature_metrics["largest_gap_deg"],
         )
 
+        hypotheses = anatomy_candidates(gray, geom, annulus_mask) if review_anatomy else []
         dt_ms = (time.perf_counter() - t0) * 1000.0
 
         return PentacamDetectionResult(
@@ -222,6 +239,7 @@ class PentacamIrisDetector:
             confidence=confidence,
             failure_reason=fail_reason,
             processing_time_ms=dt_ms,
+            anatomy_candidates=hypotheses,
         )
 
     def _build_ui_mask(self, gray: np.ndarray) -> np.ndarray:
@@ -268,6 +286,7 @@ class PentacamIrisDetector:
         self,
         gray: np.ndarray,
         ui_mask: np.ndarray,
+        refine_boundary: bool = True,
     ) -> Tuple[Optional[PentacamGeometry], str]:
         """Automatically find pupil and limbus on Pentacam IR imagery.
 
@@ -377,17 +396,32 @@ class PentacamIrisDetector:
             semi_major=float(limbus_r),
             semi_minor=float(limbus_r),
             angle_deg=0.0,
-            fit_quality=0.85,
+            fit_quality=0.40,
         )
+
+        refinement = refine_limbus(gray, ui_mask, best_limbus) if refine_boundary else None
+        refined = None
+        support, residual = [], None
+        method = "coarse_circle"
+        if refinement is not None:
+            refined, points, residual = refinement
+            support = [tuple(map(float, point)) for point in points]
+            method = "supported_ellipse"
+        else:
+            # This remains a coarse estimate, not a high-confidence full edge.
+            best_limbus.fit_quality = .40
 
         geom = PentacamGeometry(
             pupil=best_pupil,
             limbus=best_limbus,
+            refined_limbus=refined,
             pupil_detected=True,
             limbus_detected=True,
             pupil_radius_px=float(best_pupil.radius),
             limbus_radius_px=float(best_limbus.radius),
             pupil_limbus_ratio=float(best_pupil.radius / max(best_limbus.radius, 1e-6)),
+            limbus_method=method, limbus_support_points=support,
+            limbus_fit_residual_px=residual,
         )
 
         return geom, ""
@@ -402,7 +436,7 @@ class PentacamIrisDetector:
         h, w = shape[:2]
         annulus = np.zeros((h, w), dtype=np.uint8)
 
-        le = geom.limbus
+        le = geom.refined_limbus or geom.limbus
         pe = geom.pupil
 
         if le is None or pe is None:
@@ -442,10 +476,10 @@ class PentacamIrisDetector:
         geom: PentacamGeometry,
         annulus_mask: np.ndarray,
     ) -> Tuple[List[PentacamFeature], Dict]:
-        """Detect distinctive iris landmarks on a polar lattice and classify them."""
+        """Detect spatially separated texture keypoints; no anatomical classification."""
         h, w = gray.shape[:2]
         pe = geom.pupil
-        le = geom.limbus
+        le = geom.refined_limbus or geom.limbus
 
         if pe is None or le is None:
             return [], {"num_candidates": 0, "angular_coverage": 0.0, "largest_gap_deg": 360.0}
@@ -475,24 +509,26 @@ class PentacamIrisDetector:
         p90 = float(np.percentile(iris_pixels, 90))
         iris_contrast_span = max(p90 - p10, 10.0)
 
-        # Gather all lattice patches in one batch. Avoid hundreds of Python
-        # calls to std/mean/histogram per reference or live frame.
-        angles = np.repeat(np.linspace(0, 360, self.num_angles, endpoint=False), self.num_radii)
-        radial = np.tile(np.linspace(self.inner_inset_frac, 1 - self.outer_inset_frac,
-                                     self.num_radii), self.num_angles)
-        radians = np.deg2rad(angles)
-        def radii(e):
-            t = radians - np.deg2rad(e.angle_deg)
-            return e.semi_major * e.semi_minor / np.sqrt(
-                (e.semi_minor * np.cos(t)) ** 2 + (e.semi_major * np.sin(t)) ** 2)
-        rr = radii(pe) * (1 - radial) + radii(le) * radial
-        fx = pcx + radial * (lcx - pcx) + rr * np.cos(radians)
-        fy = pcy + radial * (lcy - pcy) + rr * np.sin(radians)
+        # Detect actual two-dimensional texture extrema instead of accepting
+        # arbitrary lattice positions. Erosion keeps entire descriptor patches
+        # away from glints, annotations and uncertain annulus edges.
+        safe = cv2.erode(annulus_mask, np.ones((9, 9), np.uint8))
+        safe[:max(0, int(le.center_y - .65 * le.semi_minor)), :] = 0
+        corner_image = cv2.GaussianBlur(gray, (5, 5), 1.0)
+        corner_response = cv2.cornerMinEigenVal(corner_image, blockSize=5)
+        corners = cv2.goodFeaturesToTrack(corner_image,
+            maxCorners=min(240, self.num_angles * 3), qualityLevel=.025,
+            minDistance=max(5., le.radius * .035), mask=safe, blockSize=5)
+        if corners is None:
+            return [], {"num_candidates": 0, "angular_coverage": 0., "largest_gap_deg": 360.}
+        fx, fy = corners[:, 0, 0], corners[:, 0, 1]
+        angles = np.degrees(np.arctan2(fy-pcy, fx-pcx)) % 360
+        distance = np.hypot(fx-pcx, fy-pcy)
+        radial = np.clip((distance - pe.radius) / max(le.radius-pe.radius, 1), 0, 1)
         ix, iy = np.rint(fx).astype(int), np.rint(fy).astype(int)
         inside = (ix >= 3) & (iy >= 3) & (ix < w - 3) & (iy < h - 3)
         indices = np.flatnonzero(inside)
-        indices = indices[annulus_mask[iy[indices], ix[indices]] > 0]
-        num_candidates = len(angles)
+        num_candidates = len(corners)
         accepted_features = []
         if len(indices):
             dy, dx = np.mgrid[-3:4, -3:4]
@@ -515,7 +551,7 @@ class PentacamIrisDetector:
                 accepted_features.append(PentacamFeature(
                     id=len(accepted_features), x=float(fx[i]), y=float(fy[i]),
                     angle_deg=float(angles[i]), radial_norm=float(radial[i]),
-                    response=float(mean_lap[j]), confidence=float(confidence[j]),
+                    response=float(corner_response[iy[i], ix[i]] * 10000), confidence=float(confidence[j]),
                     valid=True, descriptor=hist[j].astype(np.float32)))
 
         # Compute coverage metrics

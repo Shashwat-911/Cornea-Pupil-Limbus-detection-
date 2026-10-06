@@ -54,6 +54,8 @@ class PentacamGeometry:
     """
     pupil: Optional[EllipseParams] = None
     limbus: Optional[EllipseParams] = None
+    # Independent anatomical review fit; registration retains its stable envelope.
+    refined_limbus: Optional[EllipseParams] = None
 
     pupil_detected: bool = False
     limbus_detected: bool = False
@@ -61,6 +63,9 @@ class PentacamGeometry:
     pupil_radius_px: float = 0.0
     limbus_radius_px: float = 0.0
     pupil_limbus_ratio: float = 0.0
+    limbus_method: str = "supplied"
+    limbus_support_points: List[Tuple[float, float]] = field(default_factory=list)
+    limbus_fit_residual_px: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d: Dict[str, Any] = {
@@ -69,11 +74,16 @@ class PentacamGeometry:
             "pupil_radius_px": round(self.pupil_radius_px, 2),
             "limbus_radius_px": round(self.limbus_radius_px, 2),
             "pupil_limbus_ratio": round(self.pupil_limbus_ratio, 4),
+            "limbus_method": self.limbus_method,
+            "limbus_support_points": self.limbus_support_points,
+            "limbus_fit_residual_px": self.limbus_fit_residual_px,
         }
         if self.pupil is not None:
             d["pupil"] = self.pupil.to_dict()
         if self.limbus is not None:
             d["limbus"] = self.limbus.to_dict()
+        if self.refined_limbus is not None:
+            d["refined_limbus"] = self.refined_limbus.to_dict()
         return d
 
 
@@ -93,6 +103,8 @@ class PentacamFeature:
     confidence: float = 0.0
     valid: bool = True
     descriptor: Optional[np.ndarray] = None
+    kind: str = "texture_keypoint"
+    anatomy_verified: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -104,6 +116,8 @@ class PentacamFeature:
             "response": float(self.response),
             "confidence": float(self.confidence),
             "valid": bool(self.valid),
+            "kind": self.kind,
+            "anatomy_verified": self.anatomy_verified,
             "descriptor_len": (
                 len(self.descriptor) if self.descriptor is not None else 0
             ),
@@ -152,6 +166,7 @@ class PentacamDetectionResult:
     failure_reason: str = ""
 
     processing_time_ms: float = 0.0
+    anatomy_candidates: List[PentacamFeature] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -167,4 +182,5 @@ class PentacamDetectionResult:
             "confidence": round(self.confidence, 4),
             "failure_reason": self.failure_reason,
             "processing_time_ms": round(self.processing_time_ms, 2),
+            "anatomy_candidates": [f.to_dict() for f in self.anatomy_candidates],
         }

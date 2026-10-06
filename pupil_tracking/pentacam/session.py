@@ -42,7 +42,7 @@ class SittingRegistrationSession:
         if not eye_id or laterality not in ("OD", "OS"):
             raise ValueError("A nonempty eye_id and OD/OS laterality are required")
         prepared, _ = self._prepare(image)
-        detection = self.engine.pentacam_detector.detect(prepared)
+        detection = self.engine.pentacam_detector.detect(prepared, refine_boundary=False)
         if not detection.valid:
             raise ValueError(f"Reference rejected: {detection.failure_reason}")
         self.reference = prepared.copy()
@@ -69,7 +69,8 @@ class SittingRegistrationSession:
                                                    failure_reason="Reference and current eye identity/laterality differ")
         current, (x, y, sx, sy) = self._prepare(image, crop=detection is None)
         if detection is None:
-            detected = self.engine.pentacam_detector.detect(current, extract_features=False)
+            detected = self.engine.pentacam_detector.detect(current, extract_features=False,
+                                                           refine_boundary=False)
             if not detected.valid:
                 return CrossSystemRegistrationResult(
                     failure=RegistrationFailureKind.NO_ELITA, failure_reason=detected.failure_reason,

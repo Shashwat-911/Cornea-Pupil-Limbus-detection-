@@ -1,0 +1,271 @@
+{
+  "scope": "Known transformed geometry; top 60 spatially separated points, 3px one-to-one tolerance at 640px image width; synthetic warp plus brightness change, no anatomical labels",
+  "images": 11,
+  "trials": [
+    {
+      "image": 0,
+      "angle": -6.75,
+      "reference_count": 28,
+      "current_count": 30,
+      "repeated": 26,
+      "fraction": 0.9285714285714286
+    },
+    {
+      "image": 0,
+      "angle": 3.25,
+      "reference_count": 28,
+      "current_count": 29,
+      "repeated": 25,
+      "fraction": 0.8928571428571429
+    },
+    {
+      "image": 0,
+      "angle": 8.5,
+      "reference_count": 28,
+      "current_count": 29,
+      "repeated": 27,
+      "fraction": 0.9642857142857143
+    },
+    {
+      "image": 1,
+      "angle": -6.75,
+      "reference_count": 60,
+      "current_count": 25,
+      "repeated": 20,
+      "fraction": 0.3333333333333333
+    },
+    {
+      "image": 1,
+      "angle": 3.25,
+      "reference_count": 60,
+      "current_count": 25,
+      "repeated": 21,
+      "fraction": 0.35
+    },
+    {
+      "image": 1,
+      "angle": 8.5,
+      "reference_count": 60,
+      "current_count": 24,
+      "repeated": 19,
+      "fraction": 0.31666666666666665
+    },
+    {
+      "image": 2,
+      "angle": -6.75,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 50,
+      "fraction": 0.8333333333333334
+    },
+    {
+      "image": 2,
+      "angle": 3.25,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 48,
+      "fraction": 0.8
+    },
+    {
+      "image": 2,
+      "angle": 8.5,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 47,
+      "fraction": 0.7833333333333333
+    },
+    {
+      "image": 3,
+      "angle": -6.75,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 48,
+      "fraction": 0.8
+    },
+    {
+      "image": 3,
+      "angle": 3.25,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 50,
+      "fraction": 0.8333333333333334
+    },
+    {
+      "image": 3,
+      "angle": 8.5,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 48,
+      "fraction": 0.8
+    },
+    {
+      "image": 4,
+      "angle": -6.75,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 56,
+      "fraction": 0.9333333333333333
+    },
+    {
+      "image": 4,
+      "angle": 3.25,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 52,
+      "fraction": 0.8666666666666667
+    },
+    {
+      "image": 4,
+      "angle": 8.5,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 50,
+      "fraction": 0.8333333333333334
+    },
+    {
+      "image": 5,
+      "angle": -6.75,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 52,
+      "fraction": 0.8666666666666667
+    },
+    {
+      "image": 5,
+      "angle": 3.25,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 52,
+      "fraction": 0.8666666666666667
+    },
+    {
+      "image": 5,
+      "angle": 8.5,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 54,
+      "fraction": 0.9
+    },
+    {
+      "image": 6,
+      "angle": -6.75,
+      "reference_count": 57,
+      "current_count": 6,
+      "repeated": 1,
+      "fraction": 0.017543859649122806
+    },
+    {
+      "image": 6,
+      "angle": 3.25,
+      "reference_count": 57,
+      "current_count": 6,
+      "repeated": 3,
+      "fraction": 0.05263157894736842
+    },
+    {
+      "image": 6,
+      "angle": 8.5,
+      "reference_count": 57,
+      "current_count": 5,
+      "repeated": 2,
+      "fraction": 0.03508771929824561
+    },
+    {
+      "image": 7,
+      "angle": -6.75,
+      "reference_count": 52,
+      "current_count": 0,
+      "repeated": 0,
+      "fraction": 0.0
+    },
+    {
+      "image": 7,
+      "angle": 3.25,
+      "reference_count": 52,
+      "current_count": 0,
+      "repeated": 0,
+      "fraction": 0.0
+    },
+    {
+      "image": 7,
+      "angle": 8.5,
+      "reference_count": 52,
+      "current_count": 0,
+      "repeated": 0,
+      "fraction": 0.0
+    },
+    {
+      "image": 8,
+      "angle": -6.75,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 49,
+      "fraction": 0.8166666666666667
+    },
+    {
+      "image": 8,
+      "angle": 3.25,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 50,
+      "fraction": 0.8333333333333334
+    },
+    {
+      "image": 8,
+      "angle": 8.5,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 49,
+      "fraction": 0.8166666666666667
+    },
+    {
+      "image": 9,
+      "angle": -6.75,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 55,
+      "fraction": 0.9166666666666666
+    },
+    {
+      "image": 9,
+      "angle": 3.25,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 56,
+      "fraction": 0.9333333333333333
+    },
+    {
+      "image": 9,
+      "angle": 8.5,
+      "reference_count": 60,
+      "current_count": 60,
+      "repeated": 53,
+      "fraction": 0.8833333333333333
+    },
+    {
+      "image": 10,
+      "angle": -6.75,
+      "reference_count": 60,
+      "current_count": 46,
+      "repeated": 37,
+      "fraction": 0.6166666666666667
+    },
+    {
+      "image": 10,
+      "angle": 3.25,
+      "reference_count": 60,
+      "current_count": 41,
+      "repeated": 34,
+      "fraction": 0.5666666666666667
+    },
+    {
+      "image": 10,
+      "angle": 8.5,
+      "reference_count": 60,
+      "current_count": 45,
+      "repeated": 37,
+      "fraction": 0.6166666666666667
+    }
+  ],
+  "mean_repeatability": 0.6365952760689604
+}

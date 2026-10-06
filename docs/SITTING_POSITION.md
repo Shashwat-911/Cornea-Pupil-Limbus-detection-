@@ -230,6 +230,80 @@ python scripts/benchmark_sitting_latency.py --implementation-root output/latency
 Run the implementations sequentially on an otherwise idle computer. The
 benchmark reads local data and publishes only anonymous IDs and measurements.
 
+## Detection quality update: clinical review and boundary refinement (2026-10-06)
+
+Following feedback requesting enhanced detection quality for clinical coordinator review,
+the detection pipeline was expanded with independent boundary refinement, repeatable 2D
+texture keypoints, and explicit anatomical morphology hypotheses:
+
+### 1. Image-supported limbus boundary refinement
+
+* **Beyond concentric circles**: The standard initial limbus estimate assumes an approximately
+  circular boundary centered on the pupil. While sufficient for a stable registration envelope,
+  real human eyes exhibit limbus decentration and slight ellipticity.
+* **Radial transition sampling**: Evaluates radial intensity gradients along 180 radial rays
+  spanning the iris-sclera transition, weighted with a gaussian proximity prior.
+* **Occlusion awareness**: The superior sector (where upper eyelids and eyelashes obscure the
+  limbus) is automatically excluded, preventing false fits to eyelid margins.
+* **Constrained ellipse fit**: RANSAC-like iterative ellipse fitting requires bilateral and
+  inferior arc support (at least 45 valid support points with residual < 2.5% of radius).
+* **Supported vs. Inferred arcs**: Where direct gradient evidence exists, boundaries are
+  recorded as observed (`supported_ellipse`). Occluded or missing arcs are clearly marked as
+  inferred/extrapolated, never claimed as directly observed edges.
+
+### 2. Repeatable 2D iris texture keypoints
+
+* Rather than arbitrary lattice grid sampling, the detector now uses `cv2.goodFeaturesToTrack`
+  to identify actual 2D local texture extrema (eigenvalue response) within a safe, eroded
+  annulus mask.
+* Safety margins exclude specular Purkinje glints, pupil border artifacts, and uncertain limbal
+  transitions.
+* Spatial minimum distance constraints ensure well-distributed coverage across visible iris
+  quadrants.
+* In a known-warp repeatability test across all 11 seated patient images under rotations and
+  contrast/brightness changes (`scripts/benchmark_sitting_features.py`), top keypoints achieved
+  **63.7% one-to-one spatial repeatability** within a 3-pixel tolerance at 640px width.
+  See [feature validation report](sitting_features_validation.json).
+
+### 3. Morphology hypotheses for expert review (crypts and furrows)
+
+* Multi-scale Hessian analysis (`sigma = 1.5, 3.0, 4.5`) identifies local morphological patterns:
+  - **Crypt-like candidates (`C?`)**: Dark, compact depressions with positive Hessian eigenvalues
+    in the inner-to-mid iris zone.
+  - **Furrow-like candidates (`F?`)**: Peripheral dark ridges oriented tangentially along iris
+    circumference in the outer third of the iris.
+* **Strict clinical boundary**: Near-infrared image appearance alone cannot conclusively verify
+  anatomical crypts or furrows without histological or multi-angle slit-lamp confirmation.
+  These points are exposed with `anatomy_verified = False` and `confidence = 0.0` strictly as
+  unverified hypotheses for expert ophthalmic review, and are deliberately excluded from
+  affecting cyclotorsion registration.
+
+### 4. Architectural separation: Review geometry vs. Registration envelope
+
+* Experimental evaluation revealed that allowing single-frame refined ellipse parameters to
+  directly distort the polar unwrapping grid increased angular measurement jitter.
+* To preserve high registration accuracy, cyclotorsion matching retains the validated, robust
+  circular geometry envelope, while the refined boundary and feature points are provided for
+  visualization, coordinate reporting, and physician review.
+
+### 5. Physician review visualization
+
+A dedicated review renderer generates a standardized 3-panel comparative diagnostic card:
+
+```powershell
+python -m scripts.review_sitting --input "sitting 1.jpeg" --output-dir output/doctor_review/image_1
+python -m scripts.review_sitting --input "sitting 2.jpeg" --output-dir output/doctor_review/image_2
+```
+
+Outputs:
+* **Panel 1 (Original)**: Unmodified input crop.
+* **Panel 2 (Boundary support + keypoints)**: Green pupil ellipse, cyan solid supported limbus,
+  dashed gray inferred limbus, amber local texture keypoints.
+* **Panel 3 (Anatomical review)**: Blue `C?` crypt-like candidates and magenta `F?` furrow-like
+  candidates for ophthalmic inspection.
+* Formatted JSON diagnostics detailing support point counts, fit residual in pixels, and keypoint
+  coordinates.
+
 ## Remaining validation required
 
 Acquire confirmed same-eye seated/current pairs with laterality, camera
@@ -247,3 +321,4 @@ Research context: seated-to-supine cyclotorsion is estimated by comparing
 registered images, not by assigning an angle to an isolated seated image.
 See [posture-related ocular cyclotorsion study](https://pmc.ncbi.nlm.nih.gov/articles/PMC7005750/)
 and [OpenCV motion-analysis documentation](https://docs.opencv.org/4.5.1/d7/df3/group__imgproc__motion.html).
+
