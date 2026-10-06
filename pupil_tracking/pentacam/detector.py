@@ -280,27 +280,35 @@ class PentacamIrisDetector:
 
         # 1. Pupil localization
         # Pupil is dark: search lowest 15th percentile of intensity inside valid mask
-        valid_pixels = blurred[ui_mask > 0]
-        if len(valid_pixels) == 0:
+        histogram = cv2.calcHist([blurred], [0], ui_mask, [256], [0, 256]).ravel()
+        count = int(histogram.sum())
+        if count == 0:
             return None, "No valid ocular pixels outside UI"
-
-        p15 = float(np.percentile(valid_pixels, 15))
+        # Exact linear percentile of uint8 values via a 256-bin histogram;
+        # avoids allocating/sorting the valid pixel array on every frame.
+        cumulative = np.cumsum(histogram, dtype=np.float64)
+        rank = .15 * (count - 1)
+        lo, hi = math.floor(rank), math.ceil(rank)
+        low_value = np.searchsorted(cumulative, lo, side="right")
+        high_value = np.searchsorted(cumulative, hi, side="right")
+        p15 = float(low_value + (rank - lo) * (high_value - low_value))
         # Several dark thresholds prevent a low-contrast iris from joining the
         # pupil while retaining pupils above an absolute camera black level.
         k_close = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
+        usable = cv2.compare(ui_mask, 0, cv2.CMP_GT)
         contours = []
         for threshold in sorted(set((20.0, 30.0, 40.0, max(p15, 25.0)))):
-            pupil_bin = ((blurred < threshold) & (ui_mask > 0)).astype(np.uint8) * 255
+            pupil_bin = cv2.bitwise_and(cv2.compare(blurred, math.ceil(threshold) - 1, cv2.CMP_LE), usable)
             pupil_bin = cv2.morphologyEx(pupil_bin, cv2.MORPH_CLOSE, k_close)
             found, _ = cv2.findContours(pupil_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             contours.extend(found)
         best_pupil = None
         best_score = -1.0
+        min_pupil_area = math.pi * (min(h, w) * 0.05) ** 2
+        max_pupil_area = math.pi * (min(h, w) * 0.35) ** 2
 
         for cnt in contours:
             area = cv2.contourArea(cnt)
-            min_pupil_area = math.pi * (min(h, w) * 0.05) ** 2
-            max_pupil_area = math.pi * (min(h, w) * 0.35) ** 2
             if not (min_pupil_area <= area <= max_pupil_area):
                 continue
             if len(cnt) < 5:

@@ -53,6 +53,7 @@ class CrossModalityRegistrationEngine:
         self._cached_reference_result: Optional[PentacamDetectionResult] = None
         self._polar_cache_key = None
         self._polar_cache = None
+        self._angular_reference_cache = {}
         self.last_angular_match = None
 
         # Dynamic mode temporal filter state
@@ -157,6 +158,7 @@ class CrossModalityRegistrationEngine:
             self._polar_cache = self._unwrap_pentacam(pentacam_image, pentacam_result)
             self._polar_cache_key = polar_key
             self._last_smooth_theta = None
+            self._angular_reference_cache.clear()
         polar_pentacam = self._polar_cache
         polar_elita = self.unwrapper.unwrap_from_detection(
             elita_image, elita_detection, validity_mask=registration_mask(elita_image))
@@ -287,7 +289,8 @@ class CrossModalityRegistrationEngine:
     ) -> Tuple[float, float, float]:
         """Compatibility tuple for the masked angular matcher; PSR is unused."""
         match = masked_angular_match(enh_ref, enh_curr, mask_ref, mask_curr,
-                                     self.max_rotation_search_deg)
+                                     self.max_rotation_search_deg,
+                                     reference_cache=self._angular_reference_cache)
         self.last_angular_match = match
         return match.angle_deg, (match.score if match.valid else 0.0), 0.0
 

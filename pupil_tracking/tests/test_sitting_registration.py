@@ -16,6 +16,25 @@ def strip(seed=5):
     return cv2.GaussianBlur(rng.normal(120, 30, (48, 720)).astype(np.float32), (5, 3), 0)
 
 
+@pytest.mark.parametrize('rows', [8, 49, 64])
+def test_reference_spectrum_cache_tracks_content_and_mask(rows):
+    rng = np.random.default_rng(819)
+    a = rng.normal(100, 20, (rows, 720)).astype(np.float32)
+    b = np.roll(a, 7, axis=1)
+    mask = np.ones_like(a, dtype=np.uint8)
+    cache = {}
+    for change in ('initial', 'reuse', 'texture', 'mask'):
+        if change == 'texture':
+            a[:] = np.roll(a, 3, axis=1)
+        elif change == 'mask':
+            mask[:, 20:240] = 0
+        cached = masked_angular_match(a, b, mask, reference_cache=cache)
+        fresh = masked_angular_match(a, b, mask)
+        assert cached == fresh
+        assert cached.valid
+        assert len(cache) == 2
+
+
 @pytest.mark.parametrize("angle", [-15.25, -4.75, -.25, 0., .25, 4.75, 15.25])
 def test_masked_fractional_shift_and_reverse(angle):
     a = strip()

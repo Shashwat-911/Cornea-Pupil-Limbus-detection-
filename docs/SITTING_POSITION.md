@@ -182,6 +182,54 @@ See [the full anonymized report](sitting_validation.json) for every trial and
 runtime details. These are development-set digital-rotation measurements, not
 clinical performance or a held-out validation claim.
 
+## CPU latency update (2026-10-06)
+
+A sequential comparison against an isolated checkout of commit `4aa1d86`
+used the same 11 local images, three digital rotations per image, ten repeats,
+one OpenCV thread, automatic geometry, 640-pixel processing limit and 720
+angular samples. Each implementation processed 330 frames after warm-up.
+
+| Session processing | Previous version | Optimized version |
+| --- | ---: | ---: |
+| Median latency | 41.92 ms | 36.76 ms |
+| P95 latency | 48.76 ms | 41.06 ms |
+| Median-equivalent processing throughput | 23.86 FPS | 27.20 FPS |
+
+Median latency fell 12.3%; p95 fell 15.8%. These comparable measurements
+supersede the historical timing above for this optimization comparison.
+They exclude capture, file decoding, display and initial reference setup;
+they are not camera-to-display latency or a guarantee for other laptops.
+
+The matcher sums spectra within radial bands before inverse FFT, reducing
+384 inverse transforms to 18 without discarding pixels. It caches the reference
+spectrum with content-based invalidation, including mask changes. Pupil
+thresholding uses an exact uint8 histogram percentile and OpenCV operations.
+Resolution, current-frame geometry detection and rejection thresholds remain
+unchanged. One CPU thread remains the recommended default: additional threads
+did not consistently improve this workload.
+
+All 462 digital-rotation acceptance decisions matched the previous report;
+the largest accepted angle change was below 0.000003 degrees. The bounded
+session still accepted 151/154 trials with maximum accepted error 0.301 degrees;
+all 55 unconfirmed cross-image controls were rejected. These remain synthetic
+development tests, not clinical accuracy measurements.
+
+Verification: full regression suite 546 passed / 14 skipped; subsequent seated
+suite 23 passed, including three new cache-mutation cases. Sixty additional
+masked numerical comparisons against the archived matcher agreed within 1e-4.
+See [the anonymous comparison report](sitting_latency_validation.json).
+
+Reproduce the latency run with:
+
+```powershell
+python scripts/benchmark_sitting_latency.py --report output/sitting/latency.json
+# Compare against an extracted git-archive checkout containing pupil_tracking:
+python scripts/benchmark_sitting_latency.py --implementation-root output/latency_baseline --report output/sitting/latency_before.json
+```
+
+Run the implementations sequentially on an otherwise idle computer. The
+benchmark reads local data and publishes only anonymous IDs and measurements.
+
 ## Remaining validation required
 
 Acquire confirmed same-eye seated/current pairs with laterality, camera

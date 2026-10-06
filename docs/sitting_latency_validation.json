@@ -1,0 +1,4671 @@
+{
+  "baseline_commit": "4aa1d86a83461b9f5512a05ef7da5e2a4e8180d2",
+  "scope": "Warmed session, automatic geometry, BGR input, max_size=640, 720 angular samples; excludes capture, decoding and display",
+  "environment": {
+    "python": "3.14.2",
+    "opencv": "4.13.0",
+    "numpy": "2.4.4",
+    "processor": "AMD64 Family 25 Model 68 Stepping 1, AuthenticAMD",
+    "threads": 1
+  },
+  "before": {
+    "images": 11,
+    "frames": 330,
+    "accepted": 330,
+    "median_ms": 41.916199999832315,
+    "p95_ms": 48.75882000023921,
+    "max_error_deg": 0.06773236393928528,
+    "processing_fps": 23.85712445317086
+  },
+  "after": {
+    "images": 11,
+    "frames": 330,
+    "accepted": 330,
+    "median_ms": 36.76329999962036,
+    "p95_ms": 41.05557000002591,
+    "max_error_deg": 0.06773227074496191,
+    "processing_fps": 27.201040168056913
+  },
+  "latency_reduction_percent": 12.293337659980086,
+  "quality": {
+    "trials": 462,
+    "unchanged_acceptance_decisions": 462,
+    "maximum_accepted_angle_change_deg": 2.4287107159848276e-06,
+    "bounded_session_accepted": 151,
+    "bounded_session_trials": 154,
+    "bounded_session_max_error_deg": 0.3004782033290674,
+    "unconfirmed_pair_acceptances": 0,
+    "unconfirmed_pairs": 55
+  },
+  "verification": {
+    "full_suite_passed": 546,
+    "full_suite_skipped": 14,
+    "subsequent_targeted_suite_passed": 23,
+    "new_cache_cases": 3,
+    "legacy_masked_numerical_comparisons": 60
+  },
+  "before_trials": [
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990975952707231,
+      "latency_ms": 41.43610000028275
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 42.2699000009743
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.006027878727764,
+      "latency_ms": 42.208799999571056
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990975952707231,
+      "latency_ms": 43.788799999674666
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 50.878000000011525
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.006027878727764,
+      "latency_ms": 48.409999999421416
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990975952707231,
+      "latency_ms": 44.524499999170075
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 43.78999999971711
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.006027878727764,
+      "latency_ms": 41.011600000274484
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990975952707231,
+      "latency_ms": 41.93459999987681
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 43.895700000575744
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.006027878727764,
+      "latency_ms": 54.776099999799044
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990975952707231,
+      "latency_ms": 63.381700001627905
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 53.938600000037695
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.006027878727764,
+      "latency_ms": 48.7399000012374
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990975952707231,
+      "latency_ms": 49.12490000060643
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 47.62440000013157
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.006027878727764,
+      "latency_ms": 42.26620000008552
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990975952707231,
+      "latency_ms": 42.743700001665275
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 43.462699999508914
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.006027878727764,
+      "latency_ms": 44.4404999998369
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990975952707231,
+      "latency_ms": 48.61449999953038
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 48.9436999996542
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.006027878727764,
+      "latency_ms": 46.0229000000254
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990975952707231,
+      "latency_ms": 45.24700000001758
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 48.112400001627975
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.006027878727764,
+      "latency_ms": 41.476200000033714
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990975952707231,
+      "latency_ms": 46.31129999870609
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 47.84800000015821
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.006027878727764,
+      "latency_ms": 54.04389999966952
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012746062129736,
+      "latency_ms": 45.886899999459274
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -8.206946233713097e-08,
+      "latency_ms": 47.882700000627665
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0018930189544335,
+      "latency_ms": 49.79780000030587
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012746062129736,
+      "latency_ms": 46.36439999922004
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -8.206946233713097e-08,
+      "latency_ms": 46.021899999686866
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0018930189544335,
+      "latency_ms": 45.41149999931804
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012746062129736,
+      "latency_ms": 41.99059999882593
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -8.206946233713097e-08,
+      "latency_ms": 43.96369999994931
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0018930189544335,
+      "latency_ms": 43.0835000006482
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012746062129736,
+      "latency_ms": 44.89300000022922
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -8.206946233713097e-08,
+      "latency_ms": 45.69390000142448
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0018930189544335,
+      "latency_ms": 49.68369999915012
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012746062129736,
+      "latency_ms": 45.054599999275524
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -8.206946233713097e-08,
+      "latency_ms": 43.98599999876751
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0018930189544335,
+      "latency_ms": 44.185599999764236
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012746062129736,
+      "latency_ms": 41.0171999992599
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -8.206946233713097e-08,
+      "latency_ms": 45.54619999908027
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0018930189544335,
+      "latency_ms": 41.67280000001483
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012746062129736,
+      "latency_ms": 43.04819999924803
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -8.206946233713097e-08,
+      "latency_ms": 43.78329999963171
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0018930189544335,
+      "latency_ms": 47.13100000117265
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012746062129736,
+      "latency_ms": 41.149099999529426
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -8.206946233713097e-08,
+      "latency_ms": 47.37139999997453
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0018930189544335,
+      "latency_ms": 45.25099999955273
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012746062129736,
+      "latency_ms": 42.34560000077181
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -8.206946233713097e-08,
+      "latency_ms": 42.871600000580656
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0018930189544335,
+      "latency_ms": 42.039300000396906
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012746062129736,
+      "latency_ms": 39.54430000158027
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -8.206946233713097e-08,
+      "latency_ms": 43.19029999896884
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0018930189544335,
+      "latency_ms": 40.026500000749365
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000858942861669,
+      "latency_ms": 40.32330000154616
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 39.8432000001776
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.005656089168042,
+      "latency_ms": 42.18290000062552
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000858942861669,
+      "latency_ms": 40.74080000100366
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 43.662600000971
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.005656089168042,
+      "latency_ms": 41.18989999915357
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000858942861669,
+      "latency_ms": 47.89159999927506
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 42.20720000012079
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.005656089168042,
+      "latency_ms": 41.26010000072711
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000858942861669,
+      "latency_ms": 42.46249999960128
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 45.64039999968372
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.005656089168042,
+      "latency_ms": 40.25980000005802
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000858942861669,
+      "latency_ms": 43.03290000098059
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 43.3816000004299
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.005656089168042,
+      "latency_ms": 40.500600000086706
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000858942861669,
+      "latency_ms": 43.38330000064161
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 40.965700000015204
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.005656089168042,
+      "latency_ms": 40.00799999994342
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000858942861669,
+      "latency_ms": 41.90849999940838
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 40.03080000074988
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.005656089168042,
+      "latency_ms": 39.7742000004655
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000858942861669,
+      "latency_ms": 41.168999998262734
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 40.919200000644196
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.005656089168042,
+      "latency_ms": 40.76789999999164
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000858942861669,
+      "latency_ms": 40.34209999917948
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 40.706300000238116
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.005656089168042,
+      "latency_ms": 47.67919999903825
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000858942861669,
+      "latency_ms": 41.0200000005716
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 38.26840000147058
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.005656089168042,
+      "latency_ms": 42.12610000104178
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405592489988,
+      "latency_ms": 37.931299999399926
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 44.3197999993572
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.99863411730621,
+      "latency_ms": 41.75010000108159
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405592489988,
+      "latency_ms": 41.60489999958372
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 40.78430000117805
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.99863411730621,
+      "latency_ms": 43.108900001243455
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405592489988,
+      "latency_ms": 46.03520000091521
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 41.55489999902784
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.99863411730621,
+      "latency_ms": 41.02050000074087
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405592489988,
+      "latency_ms": 39.70920000028855
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 42.857299999013776
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.99863411730621,
+      "latency_ms": 42.910599999231636
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405592489988,
+      "latency_ms": 51.02269999952114
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 45.17850000047474
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.99863411730621,
+      "latency_ms": 38.836100000480656
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405592489988,
+      "latency_ms": 39.22009999951115
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 44.95649999989837
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.99863411730621,
+      "latency_ms": 43.477100000018254
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405592489988,
+      "latency_ms": 41.96139999839943
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 41.57710000072257
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.99863411730621,
+      "latency_ms": 46.49070000050415
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405592489988,
+      "latency_ms": 45.34319999947911
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 41.94939999979397
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.99863411730621,
+      "latency_ms": 43.15929999938817
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405592489988,
+      "latency_ms": 47.96420000093349
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 46.7956000011327
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.99863411730621,
+      "latency_ms": 38.72290000072098
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405592489988,
+      "latency_ms": 39.4709000011062
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 41.14370000024792
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.99863411730621,
+      "latency_ms": 41.44970000015746
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.0121552022174,
+      "latency_ms": 48.77429999942251
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 38.611099998888676
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102174088359,
+      "latency_ms": 60.282599999482045
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.0121552022174,
+      "latency_ms": 40.04910000003292
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 42.32670000055805
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102174088359,
+      "latency_ms": 44.154600000183564
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.0121552022174,
+      "latency_ms": 39.758400000209804
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 44.5889000002353
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102174088359,
+      "latency_ms": 38.1641000003583
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.0121552022174,
+      "latency_ms": 40.69969999909517
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 40.590099999462836
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102174088359,
+      "latency_ms": 39.438400001017726
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.0121552022174,
+      "latency_ms": 42.74279999845021
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 44.82789999929082
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102174088359,
+      "latency_ms": 45.42170000058832
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.0121552022174,
+      "latency_ms": 40.61170000022685
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 39.883700001155376
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102174088359,
+      "latency_ms": 43.905100001211395
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.0121552022174,
+      "latency_ms": 41.06779999892751
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 41.718200000104844
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102174088359,
+      "latency_ms": 47.062699999514734
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.0121552022174,
+      "latency_ms": 43.73879999911878
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 43.25840000092285
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102174088359,
+      "latency_ms": 40.85940000004484
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.0121552022174,
+      "latency_ms": 37.83859999930428
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 38.04390000004787
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102174088359,
+      "latency_ms": 47.91969999860157
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.0121552022174,
+      "latency_ms": 46.644100000776234
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 44.36379999970086
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102174088359,
+      "latency_ms": 47.69800000030955
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540409486741,
+      "latency_ms": 41.430399998716894
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 42.02210000039486
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027555635198951,
+      "latency_ms": 48.5052000003634
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540409486741,
+      "latency_ms": 46.309700001074816
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 40.2087999991636
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027555635198951,
+      "latency_ms": 42.74309999891557
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540409486741,
+      "latency_ms": 42.40670000035607
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 43.198599998504505
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027555635198951,
+      "latency_ms": 40.680199999769684
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540409486741,
+      "latency_ms": 43.88289999951667
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 44.19009999946866
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027555635198951,
+      "latency_ms": 50.62069999985397
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540409486741,
+      "latency_ms": 51.83519999991404
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 51.86569999932544
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027555635198951,
+      "latency_ms": 45.6770000000688
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540409486741,
+      "latency_ms": 39.08659999979136
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 42.6802999991196
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027555635198951,
+      "latency_ms": 39.78550000101677
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540409486741,
+      "latency_ms": 38.131900000735186
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 40.52630000114732
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027555635198951,
+      "latency_ms": 39.33359999973618
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540409486741,
+      "latency_ms": 39.508799998657196
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 41.357600000992534
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027555635198951,
+      "latency_ms": 39.300500000535976
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540409486741,
+      "latency_ms": 40.7004999997298
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 41.239100000893814
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027555635198951,
+      "latency_ms": 43.46420000001672
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540409486741,
+      "latency_ms": 41.52549999889743
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 42.73819999980333
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027555635198951,
+      "latency_ms": 42.27530000025581
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374251589179,
+      "latency_ms": 46.04499999913969
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 42.60789999898407
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0118239345029,
+      "latency_ms": 38.87079999913112
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374251589179,
+      "latency_ms": 37.82139999930223
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 40.76509999867994
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0118239345029,
+      "latency_ms": 38.062000001445995
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374251589179,
+      "latency_ms": 41.889399999490706
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 41.210199999113684
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0118239345029,
+      "latency_ms": 40.69580000032147
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374251589179,
+      "latency_ms": 42.55700000067009
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 42.89319999952568
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0118239345029,
+      "latency_ms": 40.979500001412816
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374251589179,
+      "latency_ms": 40.336600000955514
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 43.69109999970533
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0118239345029,
+      "latency_ms": 42.257199998857686
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374251589179,
+      "latency_ms": 40.83429999991495
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 43.418500001280336
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0118239345029,
+      "latency_ms": 40.474299999914365
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374251589179,
+      "latency_ms": 43.813299998873845
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 38.18710000086867
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0118239345029,
+      "latency_ms": 39.3631999995705
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374251589179,
+      "latency_ms": 39.74540000126581
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 44.37800000050629
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0118239345029,
+      "latency_ms": 43.856400001459406
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374251589179,
+      "latency_ms": 47.95119999835151
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 43.256900000415044
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0118239345029,
+      "latency_ms": 40.63229999883333
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374251589179,
+      "latency_ms": 41.04449999977078
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 39.329600000201026
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0118239345029,
+      "latency_ms": 44.75780000029772
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242492198944,
+      "latency_ms": 40.304600001036306
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.6166674754458654e-07,
+      "latency_ms": 40.06359999948472
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944082014262676,
+      "latency_ms": 43.13659999934316
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242492198944,
+      "latency_ms": 43.75950000030571
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.6166674754458654e-07,
+      "latency_ms": 42.2482999983913
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944082014262676,
+      "latency_ms": 44.00139999961539
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242492198944,
+      "latency_ms": 43.88459999972838
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.6166674754458654e-07,
+      "latency_ms": 39.12959999979648
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944082014262676,
+      "latency_ms": 41.10229999969306
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242492198944,
+      "latency_ms": 43.977899998935754
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.6166674754458654e-07,
+      "latency_ms": 50.001900001007016
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944082014262676,
+      "latency_ms": 40.706499999942025
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242492198944,
+      "latency_ms": 42.719299999589566
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.6166674754458654e-07,
+      "latency_ms": 41.55520000131219
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944082014262676,
+      "latency_ms": 46.21869999937189
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242492198944,
+      "latency_ms": 43.573499999183696
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.6166674754458654e-07,
+      "latency_ms": 40.87689999869326
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944082014262676,
+      "latency_ms": 46.85579999932088
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242492198944,
+      "latency_ms": 42.968699999619275
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.6166674754458654e-07,
+      "latency_ms": 38.698099999237456
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944082014262676,
+      "latency_ms": 39.89259999980277
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242492198944,
+      "latency_ms": 38.90260000116541
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.6166674754458654e-07,
+      "latency_ms": 42.791899999429006
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944082014262676,
+      "latency_ms": 38.567900000998634
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242492198944,
+      "latency_ms": 40.82569999991392
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.6166674754458654e-07,
+      "latency_ms": 43.27670000020589
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944082014262676,
+      "latency_ms": 44.32069999893429
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242492198944,
+      "latency_ms": 38.27199999977893
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.6166674754458654e-07,
+      "latency_ms": 39.24480000023323
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944082014262676,
+      "latency_ms": 44.56399999980931
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.992600718513131,
+      "latency_ms": 40.47229999923729
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 1.715521307232848e-07,
+      "latency_ms": 42.494600000281935
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.002529754769057,
+      "latency_ms": 39.247900000191294
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.992600718513131,
+      "latency_ms": 39.38500000003842
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 1.715521307232848e-07,
+      "latency_ms": 39.14249999979802
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.002529754769057,
+      "latency_ms": 38.50820000116073
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.992600718513131,
+      "latency_ms": 43.077399999674526
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 1.715521307232848e-07,
+      "latency_ms": 46.96779999903811
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.002529754769057,
+      "latency_ms": 49.88190000040049
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.992600718513131,
+      "latency_ms": 41.449300000749645
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 1.715521307232848e-07,
+      "latency_ms": 40.409299999737414
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.002529754769057,
+      "latency_ms": 43.864199999006814
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.992600718513131,
+      "latency_ms": 41.08509999969101
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 1.715521307232848e-07,
+      "latency_ms": 39.33060000053956
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.002529754769057,
+      "latency_ms": 42.99890000038431
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.992600718513131,
+      "latency_ms": 39.69569999935629
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 1.715521307232848e-07,
+      "latency_ms": 41.05080000044836
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.002529754769057,
+      "latency_ms": 39.28310000083002
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.992600718513131,
+      "latency_ms": 38.68490000058955
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 1.715521307232848e-07,
+      "latency_ms": 39.276299999983166
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.002529754769057,
+      "latency_ms": 38.44369999933406
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.992600718513131,
+      "latency_ms": 39.68209999948158
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 1.715521307232848e-07,
+      "latency_ms": 38.270000000920845
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.002529754769057,
+      "latency_ms": 38.93179999977292
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.992600718513131,
+      "latency_ms": 40.54569999971136
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 1.715521307232848e-07,
+      "latency_ms": 46.4854000001651
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.002529754769057,
+      "latency_ms": 40.4409000002488
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.992600718513131,
+      "latency_ms": 41.33879999972123
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 1.715521307232848e-07,
+      "latency_ms": 41.39219999888155
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.002529754769057,
+      "latency_ms": 45.27989999951387
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007000933866948,
+      "latency_ms": 42.992900000172085
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 44.10910000115109
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324575135484,
+      "latency_ms": 38.36840000076336
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007000933866948,
+      "latency_ms": 39.82259999975213
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 40.29579999951238
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324575135484,
+      "latency_ms": 40.239200001451536
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007000933866948,
+      "latency_ms": 41.332900000270456
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 40.684999999939464
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324575135484,
+      "latency_ms": 37.7360000002227
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007000933866948,
+      "latency_ms": 39.400200001182384
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 39.44930000034219
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324575135484,
+      "latency_ms": 37.130400000023656
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007000933866948,
+      "latency_ms": 39.160799999081064
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 47.25069999949483
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324575135484,
+      "latency_ms": 44.57650000040303
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007000933866948,
+      "latency_ms": 41.92390000025625
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 44.522199999846634
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324575135484,
+      "latency_ms": 39.905700001327205
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007000933866948,
+      "latency_ms": 47.33739999937825
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 45.112699999663164
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324575135484,
+      "latency_ms": 45.499699999709264
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007000933866948,
+      "latency_ms": 40.411599999060854
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 40.86789999928442
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324575135484,
+      "latency_ms": 41.46349999973609
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007000933866948,
+      "latency_ms": 40.046100000836304
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 42.69480000039039
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324575135484,
+      "latency_ms": 37.82089999913296
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007000933866948,
+      "latency_ms": 40.73649999918416
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 42.72489999857498
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324575135484,
+      "latency_ms": 39.62700000010955
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681867469102,
+      "latency_ms": 43.49509999883594
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 44.52510000010079
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732363939285,
+      "latency_ms": 40.5016999993677
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681867469102,
+      "latency_ms": 39.71619999902032
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 39.06289999940782
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732363939285,
+      "latency_ms": 41.11600000032922
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681867469102,
+      "latency_ms": 40.94209999857412
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 39.60929999993823
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732363939285,
+      "latency_ms": 44.72329999953217
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681867469102,
+      "latency_ms": 40.595300000859424
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 40.309799998794915
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732363939285,
+      "latency_ms": 38.92909999922267
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681867469102,
+      "latency_ms": 40.6141999992542
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 39.30620000028284
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732363939285,
+      "latency_ms": 40.907599999627564
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681867469102,
+      "latency_ms": 44.57890000048792
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 37.77939999963564
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732363939285,
+      "latency_ms": 39.27269999985583
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681867469102,
+      "latency_ms": 37.18470000058005
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 39.91479999967851
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732363939285,
+      "latency_ms": 42.11770000074466
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681867469102,
+      "latency_ms": 39.31239999837999
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 41.618599998400896
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732363939285,
+      "latency_ms": 43.344600000637
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681867469102,
+      "latency_ms": 40.5983999989985
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 39.08200000114448
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732363939285,
+      "latency_ms": 37.69049999937124
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681867469102,
+      "latency_ms": 38.69309999936377
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 0.0,
+      "latency_ms": 41.6722000009031
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732363939285,
+      "latency_ms": 39.373200001136865
+    }
+  ],
+  "after_trials": [
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990976081607517,
+      "latency_ms": 39.61739999976999
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.6627143212236064e-11,
+      "latency_ms": 36.50489999927231
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0060280292460035,
+      "latency_ms": 37.4930999987555
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990976081607517,
+      "latency_ms": 36.2409999997908
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.6627143212236064e-11,
+      "latency_ms": 38.36150000097405
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0060280292460035,
+      "latency_ms": 39.57479999917268
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990976081607517,
+      "latency_ms": 37.80729999925825
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.6627143212236064e-11,
+      "latency_ms": 44.32659999838506
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0060280292460035,
+      "latency_ms": 38.284399999611196
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990976081607517,
+      "latency_ms": 37.778899999466375
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.6627143212236064e-11,
+      "latency_ms": 38.543500000741915
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0060280292460035,
+      "latency_ms": 37.747399999716436
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990976081607517,
+      "latency_ms": 36.33140000056301
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.6627143212236064e-11,
+      "latency_ms": 37.06339999916963
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0060280292460035,
+      "latency_ms": 39.83719999996538
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990976081607517,
+      "latency_ms": 41.49630000028992
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.6627143212236064e-11,
+      "latency_ms": 41.18860000016866
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0060280292460035,
+      "latency_ms": 40.213000000221655
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990976081607517,
+      "latency_ms": 40.59210000013991
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.6627143212236064e-11,
+      "latency_ms": 36.96300000046904
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0060280292460035,
+      "latency_ms": 36.73189999972237
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990976081607517,
+      "latency_ms": 38.245699999606586
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.6627143212236064e-11,
+      "latency_ms": 35.395799999605515
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0060280292460035,
+      "latency_ms": 44.59630000019388
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990976081607517,
+      "latency_ms": 40.38089999994554
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.6627143212236064e-11,
+      "latency_ms": 36.14990000096441
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0060280292460035,
+      "latency_ms": 40.34019999926386
+    },
+    {
+      "image": 0,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.990976081607517,
+      "latency_ms": 42.01189999912458
+    },
+    {
+      "image": 0,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.6627143212236064e-11,
+      "latency_ms": 35.721399999602
+    },
+    {
+      "image": 0,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.0060280292460035,
+      "latency_ms": 38.35090000029595
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012745878326485,
+      "latency_ms": 38.337600000886596
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.4258078479864484e-10,
+      "latency_ms": 37.174199998844415
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.001893170094344,
+      "latency_ms": 37.28620000038063
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012745878326485,
+      "latency_ms": 36.0843999987992
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.4258078479864484e-10,
+      "latency_ms": 36.60130000025674
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.001893170094344,
+      "latency_ms": 40.47349999927974
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012745878326485,
+      "latency_ms": 36.8730999998661
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.4258078479864484e-10,
+      "latency_ms": 37.839799999346724
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.001893170094344,
+      "latency_ms": 39.10040000118897
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012745878326485,
+      "latency_ms": 36.78079999917827
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.4258078479864484e-10,
+      "latency_ms": 37.07790000044042
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.001893170094344,
+      "latency_ms": 34.74640000058571
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012745878326485,
+      "latency_ms": 35.724700001082965
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.4258078479864484e-10,
+      "latency_ms": 36.678300000858144
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.001893170094344,
+      "latency_ms": 35.0058000003628
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012745878326485,
+      "latency_ms": 38.66019999986747
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.4258078479864484e-10,
+      "latency_ms": 41.01799999989453
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.001893170094344,
+      "latency_ms": 40.04770000028657
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012745878326485,
+      "latency_ms": 39.87550000056217
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.4258078479864484e-10,
+      "latency_ms": 35.20659999958298
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.001893170094344,
+      "latency_ms": 35.81389999999374
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012745878326485,
+      "latency_ms": 35.45699999995122
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.4258078479864484e-10,
+      "latency_ms": 36.53849999864178
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.001893170094344,
+      "latency_ms": 37.757000000055996
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012745878326485,
+      "latency_ms": 37.094100000103936
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.4258078479864484e-10,
+      "latency_ms": 37.64539999974659
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.001893170094344,
+      "latency_ms": 33.97360000053595
+    },
+    {
+      "image": 1,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012745878326485,
+      "latency_ms": 34.7485999991477
+    },
+    {
+      "image": 1,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.4258078479864484e-10,
+      "latency_ms": 34.60999999879277
+    },
+    {
+      "image": 1,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.001893170094344,
+      "latency_ms": 36.87069999978121
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000859127867926,
+      "latency_ms": 37.40119999929448
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 2.253939962562122e-10,
+      "latency_ms": 35.16319999835105
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00565649310498,
+      "latency_ms": 35.93639999962761
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000859127867926,
+      "latency_ms": 35.54240000084974
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 2.253939962562122e-10,
+      "latency_ms": 38.9417999995203
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00565649310498,
+      "latency_ms": 36.51950000130455
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000859127867926,
+      "latency_ms": 35.24379999907978
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 2.253939962562122e-10,
+      "latency_ms": 39.20309999921301
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00565649310498,
+      "latency_ms": 37.8259999997681
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000859127867926,
+      "latency_ms": 36.14629999901808
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 2.253939962562122e-10,
+      "latency_ms": 35.69880000031844
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00565649310498,
+      "latency_ms": 36.76330000052985
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000859127867926,
+      "latency_ms": 35.17459999966377
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 2.253939962562122e-10,
+      "latency_ms": 34.77329999986978
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00565649310498,
+      "latency_ms": 35.606199999165256
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000859127867926,
+      "latency_ms": 37.18529999969178
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 2.253939962562122e-10,
+      "latency_ms": 33.80819999983942
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00565649310498,
+      "latency_ms": 36.56639999826439
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000859127867926,
+      "latency_ms": 34.76759999830392
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 2.253939962562122e-10,
+      "latency_ms": 36.341799999718205
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00565649310498,
+      "latency_ms": 35.00209999947401
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000859127867926,
+      "latency_ms": 38.13640000043961
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 2.253939962562122e-10,
+      "latency_ms": 39.20350000043982
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00565649310498,
+      "latency_ms": 35.90479999911622
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000859127867926,
+      "latency_ms": 37.0493999998871
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 2.253939962562122e-10,
+      "latency_ms": 36.17600000143284
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00565649310498,
+      "latency_ms": 38.28160000011849
+    },
+    {
+      "image": 2,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.000859127867926,
+      "latency_ms": 38.63859999910346
+    },
+    {
+      "image": 2,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 2.253939962562122e-10,
+      "latency_ms": 37.3304000004282
+    },
+    {
+      "image": 2,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00565649310498,
+      "latency_ms": 36.76329999871086
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405443933616,
+      "latency_ms": 35.32469999845489
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.7762631791633068e-11,
+      "latency_ms": 37.304400000721216
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998633814237895,
+      "latency_ms": 39.87629999937781
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405443933616,
+      "latency_ms": 40.02949999994598
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.7762631791633068e-11,
+      "latency_ms": 35.39380000074743
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998633814237895,
+      "latency_ms": 37.33319999992091
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405443933616,
+      "latency_ms": 37.44870000082301
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.7762631791633068e-11,
+      "latency_ms": 37.77859999900102
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998633814237895,
+      "latency_ms": 37.502999999560416
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405443933616,
+      "latency_ms": 35.50609999911103
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.7762631791633068e-11,
+      "latency_ms": 37.04730000026757
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998633814237895,
+      "latency_ms": 35.546199998861994
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405443933616,
+      "latency_ms": 37.39959999984421
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.7762631791633068e-11,
+      "latency_ms": 35.54450000046927
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998633814237895,
+      "latency_ms": 34.67430000091554
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405443933616,
+      "latency_ms": 38.13140000056592
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.7762631791633068e-11,
+      "latency_ms": 39.7398000004614
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998633814237895,
+      "latency_ms": 35.945099998571095
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405443933616,
+      "latency_ms": 36.697100000310456
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.7762631791633068e-11,
+      "latency_ms": 37.215099999230006
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998633814237895,
+      "latency_ms": 39.55800000039744
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405443933616,
+      "latency_ms": 37.97849999864411
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.7762631791633068e-11,
+      "latency_ms": 36.85179999956745
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998633814237895,
+      "latency_ms": 37.086899999849265
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405443933616,
+      "latency_ms": 34.15250000034575
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.7762631791633068e-11,
+      "latency_ms": 38.499999998748535
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998633814237895,
+      "latency_ms": 37.43419999955222
+    },
+    {
+      "image": 3,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995405443933616,
+      "latency_ms": 35.39649999947869
+    },
+    {
+      "image": 3,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.7762631791633068e-11,
+      "latency_ms": 36.612900001273374
+    },
+    {
+      "image": 3,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998633814237895,
+      "latency_ms": 34.59300000031362
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012155153618303,
+      "latency_ms": 47.90649999995367
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 4.2155210606546583e-10,
+      "latency_ms": 41.705600000568666
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102320548745,
+      "latency_ms": 37.2096999999485
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012155153618303,
+      "latency_ms": 38.197300000319956
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 4.2155210606546583e-10,
+      "latency_ms": 37.84780000023602
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102320548745,
+      "latency_ms": 39.245200001460034
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012155153618303,
+      "latency_ms": 39.92359999938344
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 4.2155210606546583e-10,
+      "latency_ms": 41.03940000095463
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102320548745,
+      "latency_ms": 40.70949999913864
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012155153618303,
+      "latency_ms": 39.29019999850425
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 4.2155210606546583e-10,
+      "latency_ms": 40.75180000108958
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102320548745,
+      "latency_ms": 35.23800000039046
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012155153618303,
+      "latency_ms": 33.48769999865908
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 4.2155210606546583e-10,
+      "latency_ms": 33.83220000068832
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102320548745,
+      "latency_ms": 33.82220000094094
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012155153618303,
+      "latency_ms": 41.037999999389285
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 4.2155210606546583e-10,
+      "latency_ms": 37.66120000000228
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102320548745,
+      "latency_ms": 38.436900000306196
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012155153618303,
+      "latency_ms": 38.48630000175035
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 4.2155210606546583e-10,
+      "latency_ms": 43.25960000096529
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102320548745,
+      "latency_ms": 37.05959999933839
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012155153618303,
+      "latency_ms": 36.44789999998466
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 4.2155210606546583e-10,
+      "latency_ms": 39.65239999888581
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102320548745,
+      "latency_ms": 37.3345000007248
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012155153618303,
+      "latency_ms": 34.042999999655876
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 4.2155210606546583e-10,
+      "latency_ms": 44.011899999532034
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102320548745,
+      "latency_ms": 36.35079999912705
+    },
+    {
+      "image": 4,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.012155153618303,
+      "latency_ms": 34.85460000047169
+    },
+    {
+      "image": 4,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 4.2155210606546583e-10,
+      "latency_ms": 36.056699998880504
+    },
+    {
+      "image": 4,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.992102320548745,
+      "latency_ms": 35.06750000087777
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540782161948,
+      "latency_ms": 34.53839999929187
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 7.137336590446479e-11,
+      "latency_ms": 35.84179999961634
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027556152623648,
+      "latency_ms": 37.32529999979306
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540782161948,
+      "latency_ms": 36.05940000124974
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 7.137336590446479e-11,
+      "latency_ms": 37.20260000045528
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027556152623648,
+      "latency_ms": 35.671400000865106
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540782161948,
+      "latency_ms": 36.668799999461044
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 7.137336590446479e-11,
+      "latency_ms": 37.09739999976591
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027556152623648,
+      "latency_ms": 41.487800001050346
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540782161948,
+      "latency_ms": 35.59740000127931
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 7.137336590446479e-11,
+      "latency_ms": 39.327200000116136
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027556152623648,
+      "latency_ms": 41.06879999926605
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540782161948,
+      "latency_ms": 36.058800000319025
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 7.137336590446479e-11,
+      "latency_ms": 35.93910000017786
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027556152623648,
+      "latency_ms": 38.24309999981779
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540782161948,
+      "latency_ms": 36.329500000647386
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 7.137336590446479e-11,
+      "latency_ms": 36.29229999933159
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027556152623648,
+      "latency_ms": 35.720300000321004
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540782161948,
+      "latency_ms": 38.23970000121335
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 7.137336590446479e-11,
+      "latency_ms": 34.56019999975979
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027556152623648,
+      "latency_ms": 38.07339999912074
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540782161948,
+      "latency_ms": 35.34799999943061
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 7.137336590446479e-11,
+      "latency_ms": 37.24979999969946
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027556152623648,
+      "latency_ms": 37.014100000305916
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540782161948,
+      "latency_ms": 37.941300000966294
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 7.137336590446479e-11,
+      "latency_ms": 37.948399998640525
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027556152623648,
+      "latency_ms": 35.296699999889825
+    },
+    {
+      "image": 5,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.993540782161948,
+      "latency_ms": 35.49299999940558
+    },
+    {
+      "image": 5,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 7.137336590446479e-11,
+      "latency_ms": 41.33360000014363
+    },
+    {
+      "image": 5,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.027556152623648,
+      "latency_ms": 40.07579999961308
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374279400949,
+      "latency_ms": 36.879100000078324
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.1251104688241703e-09,
+      "latency_ms": 36.939699999493314
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.011824125964562,
+      "latency_ms": 38.880100000824314
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374279400949,
+      "latency_ms": 36.37189999972179
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.1251104688241703e-09,
+      "latency_ms": 37.06849999980477
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.011824125964562,
+      "latency_ms": 37.176800000452204
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374279400949,
+      "latency_ms": 36.68649999963236
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.1251104688241703e-09,
+      "latency_ms": 34.9077999999281
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.011824125964562,
+      "latency_ms": 34.99290000036126
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374279400949,
+      "latency_ms": 38.40600000148697
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.1251104688241703e-09,
+      "latency_ms": 39.46429999996326
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.011824125964562,
+      "latency_ms": 37.2652999994898
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374279400949,
+      "latency_ms": 36.81170000163547
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.1251104688241703e-09,
+      "latency_ms": 36.000799998873845
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.011824125964562,
+      "latency_ms": 37.85839999909513
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374279400949,
+      "latency_ms": 36.48749999956635
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.1251104688241703e-09,
+      "latency_ms": 38.80419999950391
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.011824125964562,
+      "latency_ms": 38.64919999978156
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374279400949,
+      "latency_ms": 34.73689999918861
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.1251104688241703e-09,
+      "latency_ms": 36.683199999970384
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.011824125964562,
+      "latency_ms": 35.87659999902826
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374279400949,
+      "latency_ms": 35.269799998786766
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.1251104688241703e-09,
+      "latency_ms": 39.371299999402254
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.011824125964562,
+      "latency_ms": 35.98740000052203
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374279400949,
+      "latency_ms": 36.57779999957711
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.1251104688241703e-09,
+      "latency_ms": 34.469199999875855
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.011824125964562,
+      "latency_ms": 34.49530000034429
+    },
+    {
+      "image": 6,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.009374279400949,
+      "latency_ms": 35.26590000001306
+    },
+    {
+      "image": 6,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -1.1251104688241703e-09,
+      "latency_ms": 36.061099999642465
+    },
+    {
+      "image": 6,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.011824125964562,
+      "latency_ms": 40.32729999926232
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242403726011,
+      "latency_ms": 37.34649999933026
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 6.022193333650966e-10,
+      "latency_ms": 38.06639999856998
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944081976610844,
+      "latency_ms": 35.01789999972971
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242403726011,
+      "latency_ms": 32.79199999997218
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 6.022193333650966e-10,
+      "latency_ms": 34.94420000060927
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944081976610844,
+      "latency_ms": 36.45409999990079
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242403726011,
+      "latency_ms": 35.197600000174134
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 6.022193333650966e-10,
+      "latency_ms": 35.32209999866609
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944081976610844,
+      "latency_ms": 35.761499999352964
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242403726011,
+      "latency_ms": 35.32869999980903
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 6.022193333650966e-10,
+      "latency_ms": 37.648599998647114
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944081976610844,
+      "latency_ms": 35.85829999974521
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242403726011,
+      "latency_ms": 35.97110000009707
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 6.022193333650966e-10,
+      "latency_ms": 37.7414000013232
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944081976610844,
+      "latency_ms": 36.87300000092364
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242403726011,
+      "latency_ms": 34.85569999975269
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 6.022193333650966e-10,
+      "latency_ms": 35.48369999953138
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944081976610844,
+      "latency_ms": 36.95490000063728
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242403726011,
+      "latency_ms": 33.93390000019281
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 6.022193333650966e-10,
+      "latency_ms": 32.84619999976712
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944081976610844,
+      "latency_ms": 33.14039999895613
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242403726011,
+      "latency_ms": 37.08639999968
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 6.022193333650966e-10,
+      "latency_ms": 34.5430999987002
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944081976610844,
+      "latency_ms": 35.894200000257115
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242403726011,
+      "latency_ms": 36.08449999956065
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 6.022193333650966e-10,
+      "latency_ms": 37.21579999910318
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944081976610844,
+      "latency_ms": 38.82049999992887
+    },
+    {
+      "image": 7,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.966242403726011,
+      "latency_ms": 38.8399000003119
+    },
+    {
+      "image": 7,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 6.022193333650966e-10,
+      "latency_ms": 37.152299999434035
+    },
+    {
+      "image": 7,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.944081976610844,
+      "latency_ms": 36.83210000053805
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.99260110705425,
+      "latency_ms": 37.343399999372195
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.1115552079904571e-10,
+      "latency_ms": 40.466999998898245
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00252965733875,
+      "latency_ms": 41.62469999937457
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.99260110705425,
+      "latency_ms": 37.42919999967853
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.1115552079904571e-10,
+      "latency_ms": 39.22389999934239
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00252965733875,
+      "latency_ms": 34.2082000006485
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.99260110705425,
+      "latency_ms": 35.240899998825626
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.1115552079904571e-10,
+      "latency_ms": 42.82550000061747
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00252965733875,
+      "latency_ms": 38.00950000004377
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.99260110705425,
+      "latency_ms": 39.74449999986973
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.1115552079904571e-10,
+      "latency_ms": 38.34930000084569
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00252965733875,
+      "latency_ms": 33.29450000092038
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.99260110705425,
+      "latency_ms": 35.38309999930789
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.1115552079904571e-10,
+      "latency_ms": 35.32889999951294
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00252965733875,
+      "latency_ms": 36.52180000062799
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.99260110705425,
+      "latency_ms": 34.20499999992899
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.1115552079904571e-10,
+      "latency_ms": 37.03270000005432
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00252965733875,
+      "latency_ms": 40.694700001040474
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.99260110705425,
+      "latency_ms": 37.66160000122909
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.1115552079904571e-10,
+      "latency_ms": 43.45120000107272
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00252965733875,
+      "latency_ms": 36.484700000073644
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.99260110705425,
+      "latency_ms": 34.16470000047411
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.1115552079904571e-10,
+      "latency_ms": 35.756200000832905
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00252965733875,
+      "latency_ms": 35.10450000067067
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.99260110705425,
+      "latency_ms": 37.24270000020624
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.1115552079904571e-10,
+      "latency_ms": 36.98149999945599
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00252965733875,
+      "latency_ms": 37.387200000011944
+    },
+    {
+      "image": 8,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.99260110705425,
+      "latency_ms": 37.48519999862765
+    },
+    {
+      "image": 8,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.1115552079904571e-10,
+      "latency_ms": 35.78840000045602
+    },
+    {
+      "image": 8,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.00252965733875,
+      "latency_ms": 35.131799999362556
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007001005289555,
+      "latency_ms": 36.85310000037134
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.3481548045844916e-11,
+      "latency_ms": 41.53740000037942
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324306093466,
+      "latency_ms": 39.57559999980731
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007001005289555,
+      "latency_ms": 44.766300001356285
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.3481548045844916e-11,
+      "latency_ms": 40.63280000082159
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324306093466,
+      "latency_ms": 35.14790000008361
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007001005289555,
+      "latency_ms": 35.02350000053411
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.3481548045844916e-11,
+      "latency_ms": 35.71860000010929
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324306093466,
+      "latency_ms": 34.99610000108078
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007001005289555,
+      "latency_ms": 37.32130000025791
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.3481548045844916e-11,
+      "latency_ms": 40.22219999933441
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324306093466,
+      "latency_ms": 40.74000000036904
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007001005289555,
+      "latency_ms": 36.298400000305264
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.3481548045844916e-11,
+      "latency_ms": 35.45429999940097
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324306093466,
+      "latency_ms": 36.339500000394764
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007001005289555,
+      "latency_ms": 35.31909999946947
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.3481548045844916e-11,
+      "latency_ms": 38.018700000975514
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324306093466,
+      "latency_ms": 37.80860000006214
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007001005289555,
+      "latency_ms": 37.734299998192
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.3481548045844916e-11,
+      "latency_ms": 34.52170000127808
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324306093466,
+      "latency_ms": 33.989999999903375
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007001005289555,
+      "latency_ms": 34.38380000079633
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.3481548045844916e-11,
+      "latency_ms": 36.40810000069905
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324306093466,
+      "latency_ms": 35.311100000399165
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007001005289555,
+      "latency_ms": 33.82189999865659
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.3481548045844916e-11,
+      "latency_ms": 33.64279999914288
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324306093466,
+      "latency_ms": 36.69550000086019
+    },
+    {
+      "image": 9,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -5.007001005289555,
+      "latency_ms": 34.95159999874886
+    },
+    {
+      "image": 9,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": -2.3481548045844916e-11,
+      "latency_ms": 38.71889999936684
+    },
+    {
+      "image": 9,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 4.998324306093466,
+      "latency_ms": 38.89020000133314
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681668470782,
+      "latency_ms": 38.1625999998505
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 5.665698167345746e-11,
+      "latency_ms": 36.556400000336
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732270744962,
+      "latency_ms": 34.9954000012076
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681668470782,
+      "latency_ms": 35.40479999901436
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 5.665698167345746e-11,
+      "latency_ms": 34.5818000005238
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732270744962,
+      "latency_ms": 34.80820000004314
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681668470782,
+      "latency_ms": 35.153700000591925
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 5.665698167345746e-11,
+      "latency_ms": 34.338800000114134
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732270744962,
+      "latency_ms": 35.838600000715815
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681668470782,
+      "latency_ms": 33.97399999994377
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 5.665698167345746e-11,
+      "latency_ms": 37.062699999296456
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732270744962,
+      "latency_ms": 39.170200001535704
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681668470782,
+      "latency_ms": 36.77430000061577
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 5.665698167345746e-11,
+      "latency_ms": 34.014000000752276
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732270744962,
+      "latency_ms": 33.888500000102795
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681668470782,
+      "latency_ms": 34.35360000003129
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 5.665698167345746e-11,
+      "latency_ms": 33.482200000435114
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732270744962,
+      "latency_ms": 35.05130000121426
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681668470782,
+      "latency_ms": 33.96689999863156
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 5.665698167345746e-11,
+      "latency_ms": 34.37160000066797
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732270744962,
+      "latency_ms": 34.877899999628426
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681668470782,
+      "latency_ms": 34.44820000004256
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 5.665698167345746e-11,
+      "latency_ms": 34.20139999980165
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732270744962,
+      "latency_ms": 32.424899998659384
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681668470782,
+      "latency_ms": 34.21920000073442
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 5.665698167345746e-11,
+      "latency_ms": 31.578199999785284
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732270744962,
+      "latency_ms": 33.22679999837419
+    },
+    {
+      "image": 10,
+      "target_deg": -5,
+      "valid": true,
+      "angle_deg": -4.995681668470782,
+      "latency_ms": 34.016700001302524
+    },
+    {
+      "image": 10,
+      "target_deg": 0,
+      "valid": true,
+      "angle_deg": 5.665698167345746e-11,
+      "latency_ms": 35.274600000775536
+    },
+    {
+      "image": 10,
+      "target_deg": 5,
+      "valid": true,
+      "angle_deg": 5.067732270744962,
+      "latency_ms": 33.47849999954633
+    }
+  ]
+}

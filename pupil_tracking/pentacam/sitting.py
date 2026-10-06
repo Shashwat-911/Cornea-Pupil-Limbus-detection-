@@ -4,6 +4,7 @@ Scores are engineering quality gates, not calibrated clinical probabilities.
 Positive angles denote counter-clockwise image rotation (OpenCV convention).
 """
 from dataclasses import dataclass
+import hashlib
 
 import cv2
 import numpy as np
@@ -68,7 +69,8 @@ class AngularMatch:
     reason: str = "insufficient_texture"
 
 
-def masked_angular_match(ref, curr, mask_ref=None, mask_curr=None, max_degrees=30.0):
+def masked_angular_match(ref, curr, mask_ref=None, mask_curr=None, max_degrees=30.0,
+                         *, reference_cache=None):
     """Shift-dependent masked ZNCC, evaluated at all angles using six batched FFTs.
 
 Unlike multiplying both strips by a shared stationary mask, each candidate
@@ -94,30 +96,53 @@ averaging it away. Radial bands provide a second consistency check.
         weight = cv2.blur(np.pad(m, ((0, 0), (p, p)), mode="wrap"), (k, 1))[:, p:-p]
         mean = cv2.blur(np.pad(x * m, ((0, 0), (p, p)), mode="wrap"), (k, 1))[:, p:-p]
         return (x - mean / np.maximum(weight, 1e-6)) * m
-    a, b = highpass(a, ma), highpass(b, mb)
     n = a.shape[1]
-    fa = np.fft.rfft(np.stack((ma, a, a * a)), axis=-1)
+    # One bounded reference cache, keyed by content rather than object identity.
+    # Callers may safely reuse mutable acquisition arrays; changes invalidate it.
+    key = None
+    fa = None
+    if reference_cache is not None:
+        digest = hashlib.blake2b(digest_size=16)
+        digest.update(np.ascontiguousarray(a))
+        digest.update(np.ascontiguousarray(ma))
+        key = (a.shape, digest.digest())
+        if reference_cache.get("key") == key:
+            fa = reference_cache["spectrum"]
+    if fa is None:
+        a = highpass(a, ma)
+        fa = np.fft.rfft(np.stack((ma, a, a * a)), axis=-1)
+        if reference_cache is not None:
+            reference_cache.clear()
+            reference_cache.update(key=key, spectrum=fa)
+    b = highpass(b, mb)
     fb = np.fft.rfft(np.stack((mb, b, b * b)), axis=-1)
-    terms = np.fft.irfft(np.stack((
+    products = np.stack((
         fa[0] * fb[0].conj(), fa[1] * fb[0].conj(),
         fa[0] * fb[1].conj(), fa[2] * fb[0].conj(),
         fa[0] * fb[2].conj(), fa[1] * fb[1].conj(),
-    )), n=n, axis=-1)
+    ))
+    # Correlation is linear: sum spectra within each radial band BEFORE
+    # inverse FFT. Only 18 inverse transforms instead of 6 * num_radial,
+    # while retaining every pixel and the same three-band consistency test.
+    groups = np.array_split(products, 3, axis=1)
+    band_sizes = [group.shape[1] for group in groups]
+    terms = np.fft.irfft(np.stack([group.sum(axis=1, dtype=np.complex128)
+                                  for group in groups], axis=1), n=n, axis=-1)
     shifts = np.arange(n, dtype=float)
     shifts[shifts > n / 2] -= n
     allowed = np.abs(shifts * 360 / n) <= max_degrees
 
-    def scores(t):
+    def scores(t, num_rows):
         count, sa, sb, saa, sbb, sab = t.sum(axis=1)
         count = np.maximum(count, 1e-6)
         va, vb = saa - sa * sa / count, sbb - sb * sb / count
         denom = np.sqrt(np.maximum(va * vb, 0))
         corr = (sab - sa * sb / count) / np.maximum(denom, 1e-8)
-        overlap = count / (t.shape[1] * n)
+        overlap = count / (num_rows * n)
         ok = allowed & (overlap >= .30) & (va / count > 1e-5) & (vb / count > 1e-5)
         return np.where(ok, np.clip(corr, -1, 1), -1), overlap
 
-    score, overlap = scores(terms)
+    score, overlap = scores(terms, a.shape[0])
     peak = int(np.argmax(score))
     if score[peak] < .35:
         return AngularMatch(score=float(score[peak]), reason="weak_correlation")
@@ -128,8 +153,8 @@ averaging it away. Radial bands provide a second consistency check.
     competing = allowed & (dist > max(2, n * 2 / 360))
     margin = float(score[peak] - np.max(score[competing])) if competing.any() else 0.0
     bands = []
-    for band in np.array_split(terms, 3, axis=1):
-        bs, _ = scores(band)
+    for i, band_size in enumerate(band_sizes):
+        bs, _ = scores(terms[:, i:i+1], band_size)
         j = int(np.argmax(bs))
         if bs[j] >= .30:
             bands.append(float(shifts[j] * 360 / n))
