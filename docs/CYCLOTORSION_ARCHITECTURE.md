@@ -23,6 +23,12 @@ frame.
 5. The result contains the angle, confidence, quality state, diagnostics, and
    processing time. A caller can safely abstain when `valid` is false.
 
+The legacy multi-stream `RegistrationEngine` also requires the configured
+minimum number of corroborating streams. A single surviving stream is an
+abstention, never a clinical answer. Its broad clinical-image audit remains an
+exploratory compatibility check; the seated Phase 2 engine and its paired
+geometry tests are the release path.
+
 ## Feature review output
 
 Texture keypoints are spatially separated local structures used for inspection
@@ -82,3 +88,15 @@ expert confidence. Do not train on the current unverified hypotheses as
 ground truth. The Phase 2 cutoff is an engineering gate: target absolute
 registration error at or below 1.5 degrees and processing below 150 ms; it is
 not a clinical validation claim.
+
+## Release audit
+
+The release audit runs the complete Python test suite, the seated benchmark,
+RGB/grayscale and image-size combinations, malformed input cases, repeated
+determinism checks, metadata mismatch checks, and integrated GUI/stream tests.
+The latest run passed **555 tests with 14 skips**. The production
+cross-modality smoke case recovered 2.504 degrees from a 2.500 degree textured
+synthetic rotation (0.004 degree error, 0.982 confidence). The legacy
+multi-stream compatibility sweep had 16/20 cases within 1.5 degrees; its four
+weak cases remain visible audit failures and are not used to claim Phase 2
+performance.

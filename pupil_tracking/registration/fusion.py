@@ -98,25 +98,13 @@ class FusionEngine:
         )
 
         if len(valid_results) < self.min_streams:
-            # Not enough streams — check if we have at least one
-            if len(valid_results) == 1:
-                # Single stream: use it but with reduced confidence
-                name, sr = next(iter(valid_results.items()))
-                result.valid = True
-                result.torsion_deg = sr.torsion_deg
-                result.confidence = sr.confidence * 0.7  # Penalty for single stream
-                result.quality = assign_registration_grade(result.confidence)
-                result.agreeing_streams = 1
-                result.torsion_std_deg = 0.0
-                result.total_processing_time_ms = sum(
-                    v.processing_time_ms for v in stream_results.values()
-                )
-                return result
-            else:
-                result.total_processing_time_ms = sum(
-                    v.processing_time_ms for v in stream_results.values()
-                )
-                return result
+            # A single stream is insufficient for a clinically actionable
+            # result. Abstain instead of returning a plausible-looking angle
+            # from an uncorroborated matcher.
+            result.total_processing_time_ms = sum(
+                v.processing_time_ms for v in stream_results.values()
+            )
+            return result
 
         # Extract torsion values and weights
         torsion_values = []
