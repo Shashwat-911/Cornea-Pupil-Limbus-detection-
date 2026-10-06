@@ -337,6 +337,25 @@ def process_image(
         print(f"    Scale:        {cal.px_per_mm:.2f} px/mm")
         print(f"    Scale:        {cal.mm_per_px:.4f} mm/px")
 
+    # -- Iris ROI & Feature Detection --
+    if getattr(result, "has_both", False):
+        try:
+            from pupil_tracking.iris.detect import IrisFeatureDetector
+            iris_det = IrisFeatureDetector()
+            iris_res = iris_det.detect(image, pupil=result.pupil.ellipse, limbus=result.limbus.ellipse)
+            roi = iris_res.feature_set.roi
+            print(f"\n  * IRIS ROI & FEATURES (FOR CYCLOTORSION)")
+            print(f"    ROI Valid:    {roi.valid}")
+            if roi.valid:
+                in_r = roi.pupil_radius_px * (1.0 + roi.inner_inset_frac)
+                out_r = roi.limbus_radius_px * (1.0 - roi.outer_inset_frac)
+                print(f"    Annulus:      r_in={in_r:.1f} px -> r_out={out_r:.1f} px")
+            print(f"    Features:     {len(iris_res.feature_set.features)} landmarks detected")
+            print(f"    Coverage:     {getattr(iris_res.feature_set, 'region_coverage', 0.0):.1%}")
+            print(f"    Status:       {iris_res.status.name}")
+        except Exception:
+            pass
+
     print(f"\n{'-' * 64}")
     print(f"  Processing time: {result.metadata.processing_time_ms:.1f} ms")
     print(f"{'=' * 64}")
@@ -1081,6 +1100,42 @@ def _draw_cli_overlay(
             ref_pt = (int(round(le.center_x)), int(round(le.center_y)))
         cv2.line(out, p_pt, ref_pt, (0, 255, 255), 2, cv2.LINE_AA)
 
+        # -- Iris ROI & Feature Detection Overlay --
+        try:
+            if not hasattr(_draw_cli_overlay, "_iris_det"):
+                from pupil_tracking.iris.detect import IrisFeatureDetector
+                _draw_cli_overlay._iris_det = IrisFeatureDetector()
+            iris_res = _draw_cli_overlay._iris_det.detect(
+                image, pupil=result.pupil.ellipse, limbus=result.limbus.ellipse
+            )
+            roi = iris_res.feature_set.roi
+            if roi.valid:
+                rcx, rcy = int(round(roi.center_x)), int(round(roi.center_y))
+                in_r = int(round(roi.pupil_radius_px * (1.0 + roi.inner_inset_frac)))
+                out_r = int(round(roi.limbus_radius_px * (1.0 - roi.outer_inset_frac)))
+                cv2.circle(out, (rcx, rcy), in_r, (255, 200, 0), 1, cv2.LINE_AA)
+                cv2.circle(out, (rcx, rcy), out_r, (255, 200, 0), 1, cv2.LINE_AA)
+                cv2.putText(
+                    out,
+                    f"IRIS ROI [{len(iris_res.feature_set.features)} feats]",
+                    (rcx - 65, rcy - out_r - 8),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.45,
+                    (255, 200, 0),
+                    1,
+                    cv2.LINE_AA,
+                )
+            for feat in iris_res.feature_set.features:
+                fx, fy = int(round(feat.x)), int(round(feat.y))
+                cv2.circle(out, (fx, fy), 2, (0, 255, 255), -1)
+                cv2.circle(out, (fx, fy), 4, (255, 0, 255), 1, cv2.LINE_AA)
+                ang = np.deg2rad(feat.orientation_deg)
+                x2 = int(round(fx + 5.0 * np.cos(ang)))
+                y2 = int(round(fy + 5.0 * np.sin(ang)))
+                cv2.line(out, (fx, fy), (x2, y2), (0, 255, 255), 1, cv2.LINE_AA)
+        except Exception:
+            pass
+
     # -- quality badge -------------------------------------------
     quality = "---"
     confidence = 0.0
@@ -1197,6 +1252,17 @@ def _draw_cli_overlay_from_dict(
         if r > 0:
             cv2.circle(out, ct, r, (255, 100, 0), 2, cv2.LINE_AA)
             cv2.circle(out, ct, 4, (255, 100, 0), -1)
+
+    # -- Iris ROI Annulus in dictionary mode --
+    if pupil.get("detected") and limbus.get("detected") and pe.get("center_x") and le.get("center_x"):
+        p_r = pe.get("radius", 0)
+        l_r = le.get("radius", 0)
+        if p_r > 0 and l_r > p_r:
+            cx, cy = int(round(le["center_x"])), int(round(le["center_y"]))
+            in_r = int(round(p_r * 1.10))
+            out_r = int(round(l_r * 0.90))
+            cv2.circle(out, (cx, cy), in_r, (255, 200, 0), 1, cv2.LINE_AA)
+            cv2.circle(out, (cx, cy), out_r, (255, 200, 0), 1, cv2.LINE_AA)
 
     quality = result_dict.get("overall_quality", "---")
     conf = result_dict.get("overall_confidence", 0.0)

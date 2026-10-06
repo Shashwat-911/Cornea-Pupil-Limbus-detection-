@@ -1314,6 +1314,8 @@ class PupilTrackingGUI:
         self._show_ring_center = tk.BooleanVar(value=False)
         self._show_measurements = tk.BooleanVar(value=False)
         self._show_debug_overlay = tk.BooleanVar(value=False)
+        self._show_iris_roi = tk.BooleanVar(value=True)
+        self._show_iris_features = tk.BooleanVar(value=True)
         view_menu.add_checkbutton(
             label="Show Overlay",
             variable=self._show_overlay,
@@ -1327,6 +1329,16 @@ class PupilTrackingGUI:
         view_menu.add_checkbutton(
             label="Show Limbus",
             variable=self._show_limbus,
+            command=self._refresh_display,
+        )
+        view_menu.add_checkbutton(
+            label="Show Iris ROI",
+            variable=self._show_iris_roi,
+            command=self._refresh_display,
+        )
+        view_menu.add_checkbutton(
+            label="Show Iris Features",
+            variable=self._show_iris_features,
             command=self._refresh_display,
         )
         view_menu.add_checkbutton(
@@ -2339,7 +2351,17 @@ class PupilTrackingGUI:
         self._wtw_vars["vertical"] = add_row(wtw_frame, "Vertical WTW:")
         self._wtw_vars["mean"] = add_row(wtw_frame, "Mean WTW:")
 
-        proc_frame = add_card(cards_outer, "PROCESSING", "ProcHeader.TLabel", 3, 0, 2)
+        iris_card = add_card(
+            cards_outer, "IRIS ROI & FEATURE DETECTION", "OffsetHeader.TLabel", 3, 0, 2
+        )
+        self._ir_vars: Dict[str, tk.StringVar] = {}
+        self._ir_vars["status"] = add_row(iris_card, "ROI Status:")
+        self._ir_vars["annulus"] = add_row(iris_card, "Annulus Radii:")
+        self._ir_vars["features"] = add_row(iris_card, "Detected Features:")
+        self._ir_vars["coverage"] = add_row(iris_card, "Spatial Coverage:")
+        self._ir_vars["quality"] = add_row(iris_card, "Feature Quality:")
+
+        proc_frame = add_card(cards_outer, "PROCESSING", "ProcHeader.TLabel", 4, 0, 2)
         self._proc_time_var = add_row(proc_frame, "Proc. Time:")
         self._latency_var = add_row(proc_frame, "Latency:")
         self._latency_avg_var = add_row(proc_frame, "Latency Avg:")
@@ -5829,6 +5851,55 @@ class PupilTrackingGUI:
                     cv2.LINE_AA,
                 )
 
+        # ── Iris ROI & Iris Feature Detection Overlay ──
+        if (
+            (self._show_iris_roi.get() or self._show_iris_features.get())
+            and getattr(result, "has_both", False)
+            and getattr(result.pupil, "ellipse", None) is not None
+            and getattr(result.limbus, "ellipse", None) is not None
+            and self._current_image is not None
+        ):
+            try:
+                if not hasattr(self, "_iris_detector_instance") or self._iris_detector_instance is None:
+                    from pupil_tracking.iris.detect import IrisFeatureDetector
+                    self._iris_detector_instance = IrisFeatureDetector()
+
+                iris_res = self._iris_detector_instance.detect(
+                    self._current_image, pupil=result.pupil.ellipse, limbus=result.limbus.ellipse
+                )
+                roi = iris_res.feature_set.roi
+                if self._show_iris_roi.get() and roi.valid:
+                    rcx = int(round(roi.center_x * scale))
+                    rcy = int(round(roi.center_y * scale))
+                    in_r = int(round(roi.pupil_radius_px * (1.0 + roi.inner_inset_frac) * scale))
+                    out_r = int(round(roi.limbus_radius_px * (1.0 - roi.outer_inset_frac) * scale))
+                    cv2.circle(out, (rcx, rcy), in_r, (255, 200, 0), 1, cv2.LINE_AA)
+                    cv2.circle(out, (rcx, rcy), out_r, (255, 200, 0), 1, cv2.LINE_AA)
+                    if self._show_measurements.get():
+                        cv2.putText(
+                            out,
+                            f"Iris ROI ({len(iris_res.feature_set.features)} feats)",
+                            (rcx - int(50 * scale), rcy - out_r - int(6 * scale)),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            max(0.28, 0.40 * scale),
+                            (255, 200, 0),
+                            1,
+                            cv2.LINE_AA,
+                        )
+
+                if self._show_iris_features.get():
+                    for feat in iris_res.feature_set.features:
+                        fx = int(round(feat.x * scale))
+                        fy = int(round(feat.y * scale))
+                        cv2.circle(out, (fx, fy), max(2, int(2.5 * scale)), (0, 255, 255), -1)
+                        cv2.circle(out, (fx, fy), max(3, int(4.0 * scale)), (255, 0, 255), 1, cv2.LINE_AA)
+                        ang = np.deg2rad(feat.orientation_deg)
+                        x2 = int(round(fx + 5.0 * scale * np.cos(ang)))
+                        y2 = int(round(fy + 5.0 * scale * np.sin(ang)))
+                        cv2.line(out, (fx, fy), (x2, y2), (0, 255, 255), 1, cv2.LINE_AA)
+            except Exception:
+                pass
+
         # ── Limbal Purple Ink Marker (Gentian Violet) Overlay ──
         if (
             getattr(self, "_enable_registration_var", None) is not None
@@ -6385,6 +6456,45 @@ class PupilTrackingGUI:
                 self._wtw_vars["mean"].set(f"{m_wtw:.2f} mm")
             elif hasattr(self, "_wtw_vars"):
                 for var in self._wtw_vars.values():
+                    var.set("---")
+
+            # ── Iris ROI & Feature Detection Card ──
+            if (
+                hasattr(self, "_ir_vars")
+                and getattr(result, "has_both", False)
+                and getattr(result.pupil, "ellipse", None) is not None
+                and getattr(result.limbus, "ellipse", None) is not None
+                and self._current_image is not None
+            ):
+                try:
+                    if not hasattr(self, "_iris_detector_instance") or self._iris_detector_instance is None:
+                        from pupil_tracking.iris.detect import IrisFeatureDetector
+                        self._iris_detector_instance = IrisFeatureDetector()
+
+                    ir_res = self._iris_detector_instance.detect(
+                        self._current_image, pupil=result.pupil.ellipse, limbus=result.limbus.ellipse
+                    )
+                    roi = ir_res.feature_set.roi
+                    if roi.valid:
+                        self._ir_vars["status"].set("Active (Annulus Built)")
+                        in_r = roi.pupil_radius_px * (1.0 + roi.inner_inset_frac)
+                        out_r = roi.limbus_radius_px * (1.0 - roi.outer_inset_frac)
+                        self._ir_vars["annulus"].set(f"{in_r:.1f}px -> {out_r:.1f}px")
+                        n_feats = len(ir_res.feature_set.features)
+                        self._ir_vars["features"].set(f"{n_feats} landmarks")
+                        self._ir_vars["coverage"].set(f"{getattr(ir_res.feature_set, 'region_coverage', 0.0):.1%}")
+                        self._ir_vars["quality"].set("SURGICAL GRADE" if n_feats >= 5 else "CLINICAL")
+                    else:
+                        self._ir_vars["status"].set("Invalid ROI")
+                        self._ir_vars["annulus"].set("---")
+                        self._ir_vars["features"].set("0")
+                        self._ir_vars["coverage"].set("0%")
+                        self._ir_vars["quality"].set("INSUFFICIENT")
+                except Exception:
+                    for var in self._ir_vars.values():
+                        var.set("---")
+            elif hasattr(self, "_ir_vars"):
+                for var in self._ir_vars.values():
                     var.set("---")
 
 
