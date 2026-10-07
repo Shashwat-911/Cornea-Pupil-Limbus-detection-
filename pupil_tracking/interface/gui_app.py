@@ -3966,7 +3966,7 @@ class PupilTrackingGUI:
         )
         result = self._apply_manual_ring_policy(result)
         if getattr(self, "_enable_registration_var", None) and self._enable_registration_var.get():
-            self._compute_live_cyclotorsion(image, result)
+            self._compute_live_cyclotorsion(image, result, synchronous=True)
         self._current_result = result
         self._results_history.append(result.to_dict())
         self._update_measurements(result)
@@ -4319,16 +4319,18 @@ class PupilTrackingGUI:
                         self.root.after(0, self._on_video_complete)
                         break
                     pending_end = False
-                    # Drain queued backlog to keep display and processing latency minimal (< 100ms)
-                    while frame_queue.qsize() > 1:
-                        try:
-                            fresher_item = frame_queue.get_nowait()
-                            if fresher_item is None:
-                                pending_end = True
+                    # Only drain queued backlog for live camera feeds to keep latency minimal (< 100ms).
+                    # For video files, do NOT drop read-ahead frames so playback is complete and smooth.
+                    if self._camera_mode:
+                        while frame_queue.qsize() > 1:
+                            try:
+                                fresher_item = frame_queue.get_nowait()
+                                if fresher_item is None:
+                                    pending_end = True
+                                    break
+                                item = fresher_item
+                            except _queue.Empty:
                                 break
-                            item = fresher_item
-                        except _queue.Empty:
-                            break
                     if item is None:
                         self._video_running = False
                         break
@@ -5793,12 +5795,15 @@ class PupilTrackingGUI:
             setattr(result, "cyclotorsion_loss_pct", loss_pct)
             setattr(result, "cyclotorsion_baseline_frame", getattr(self, "_live_ref_frame_num", 0))
 
-        ir_res = self._get_or_detect_iris(result, image=image)
-        if ir_res is not None and getattr(ir_res, "feature_set", None) is not None:
-            setattr(result, "iris_features_count", len(ir_res.feature_set.features))
-            setattr(result, "iris_roi_valid", bool(ir_res.feature_set.roi.valid))
+        if getattr(self, "_enable_iris_features_var", None) and self._enable_iris_features_var.get():
+            ir_res = self._get_or_detect_iris(result, image=image)
+            if ir_res is not None and getattr(ir_res, "feature_set", None) is not None:
+                setattr(result, "iris_features_count", len(ir_res.feature_set.features))
+                setattr(result, "iris_roi_valid", bool(ir_res.feature_set.roi.valid))
 
-    def _compute_live_cyclotorsion(self, image: np.ndarray, result: Any) -> Optional[Any]:
+    def _compute_live_cyclotorsion(
+        self, image: np.ndarray, result: Any, synchronous: bool = False
+    ) -> Optional[Any]:
         """Compute live cyclotorsion relative to locked intraoperative baseline reference."""
         log = getattr(self, "logger", None) or get_logger()
         if not (getattr(self, "_enable_registration_var", None) and self._enable_registration_var.get()):
@@ -5846,20 +5851,54 @@ class PupilTrackingGUI:
             self._attach_cyclotorsion_to_result(result, self._last_cyclotorsion_result, image=image)
             return self._last_cyclotorsion_result
 
-        try:
-            reg_res = self._registration_engine.register(
-                self._live_ref_image,
-                image,
-                self._live_ref_result,
-                result,
-            )
-            self._last_cyclotorsion_result = reg_res
-            self._last_cyclo_frame_key = frame_key
-            self._attach_cyclotorsion_to_result(result, reg_res, image=image)
-            return reg_res
-        except Exception as err:
-            log.debug("Live registration calculation error: %s", err)
-            return None
+        # Synchronous execution (e.g. for doctor review or single image registration)
+        if synchronous:
+            try:
+                reg_res = self._registration_engine.register(
+                    self._live_ref_image,
+                    image,
+                    self._live_ref_result,
+                    result,
+                )
+                self._last_cyclotorsion_result = reg_res
+                self._last_cyclo_frame_key = frame_key
+                self._attach_cyclotorsion_to_result(result, reg_res, image=image)
+                return reg_res
+            except Exception as err:
+                log.debug("Live registration calculation error: %s", err)
+                return None
+
+        # Asynchronous decoupled execution for live video playback:
+        # Immediately attach the latest cyclotorsion result so video display flows smoothly without hitching
+        if getattr(self, "_last_cyclotorsion_result", None) is not None:
+            self._attach_cyclotorsion_to_result(result, self._last_cyclotorsion_result, image=image)
+
+        # Dispatch async registration calculation in background worker if not already busy
+        if not getattr(self, "_cyclo_worker_busy", False):
+            self._cyclo_worker_busy = True
+            ref_img = self._live_ref_image
+            ref_res = self._live_ref_result
+            curr_img = image.copy()
+            curr_res = result
+
+            def _worker():
+                try:
+                    reg_res = self._registration_engine.register(
+                        ref_img,
+                        curr_img,
+                        ref_res,
+                        curr_res,
+                    )
+                    self._last_cyclotorsion_result = reg_res
+                except Exception as ex:
+                    log.debug("Async live registration error: %s", ex)
+                finally:
+                    self._cyclo_worker_busy = False
+
+            t = threading.Thread(target=_worker, daemon=True, name="AsyncCyclotorsionWorker")
+            t.start()
+
+        return self._last_cyclotorsion_result
 
     def _reset_cyclotorsion_baseline(self) -> None:
         """Reset / re-zero the baseline reference frame to the current image and detection."""
@@ -5890,6 +5929,7 @@ class PupilTrackingGUI:
         self._live_ref_frame_num = 0
         self._last_cyclotorsion_result = None
         self._last_cyclo_frame_key = None
+        self._cyclo_worker_busy = False
         self._status_var.set("Cyclotorsion baseline cleared (will lock next stable frame)")
 
     def _draw_overlay_scaled(self, out: np.ndarray, result: Any, scale: float) -> None:
