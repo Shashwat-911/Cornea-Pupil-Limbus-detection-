@@ -162,6 +162,15 @@ class PupilTrackingGUI:
         self._fast_engine: Optional[Any] = None
         self._opt_processor: Optional[Any] = None
         self._registration_engine: Optional[Any] = None
+        self._live_ref_image: Optional[np.ndarray] = None
+        self._live_ref_result: Optional[Any] = None
+        self._live_ref_frame_num: int = 0
+        self._last_cyclotorsion_result: Optional[Any] = None
+        self._last_cyclo_frame_key: Optional[Tuple] = None
+        self._last_iris_frame_key: Optional[Tuple] = None
+        self._last_iris_res: Optional[Any] = None
+        self._iris_detector_instance: Optional[Any] = None
+        self._cyclo_vars: Dict[str, tk.StringVar] = {}
         self._async_capture: Optional[Any] = None
         self._using_optimized_camera: bool = False
         self._last_opt_stats: Dict[str, Any] = {}
@@ -3919,6 +3928,8 @@ class PupilTrackingGUI:
             image, frame_number=self._frame_count, source=path
         )
         result = self._apply_manual_ring_policy(result)
+        if getattr(self, "_enable_registration_var", None) and self._enable_registration_var.get():
+            self._compute_live_cyclotorsion(image, result)
         self._current_result = result
         self._results_history.append(result.to_dict())
         self._update_measurements(result)
@@ -3981,6 +3992,13 @@ class PupilTrackingGUI:
             self._tracker.reset()
         self._results_history.clear()
         self._frame_count = 0
+        self._live_ref_image = None
+        self._live_ref_result = None
+        self._live_ref_frame_num = 0
+        self._last_cyclotorsion_result = None
+        self._last_cyclo_frame_key = None
+        self._last_iris_frame_key = None
+        self._last_iris_res = None
         self._video_total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self._video_start_time = time.monotonic()
         self._last_display_update = 0.0
@@ -4152,6 +4170,8 @@ class PupilTrackingGUI:
                     dy_mm = (py - rcy) * result.calibration.mm_per_px
                     smoothed.corneal_center.offset_mm = (dx_mm, dy_mm)
                     smoothed.corneal_center.offset_magnitude_mm = math.hypot(dx_mm, dy_mm)
+            if getattr(self, "_enable_registration_var", None) and self._enable_registration_var.get():
+                self._compute_live_cyclotorsion(frame, smoothed)
             self._current_result = smoothed
             self._results_history.append(smoothed.to_dict())
 
@@ -4290,6 +4310,8 @@ class PupilTrackingGUI:
                     try:
                         fr_ns = self._dict_to_frame_ns(frame_result)
                         adapted = self._adapt_frame_result(fr_ns, frame.shape)
+                        if getattr(self, "_enable_registration_var", None) and self._enable_registration_var.get():
+                            self._compute_live_cyclotorsion(frame, adapted)
                     except Exception as exc:
                         self.logger.error("Optimised adapt error: %s", exc)
                         continue
@@ -4389,6 +4411,8 @@ class PupilTrackingGUI:
             try:
                 fr_ns = self._dict_to_frame_ns(frame_result)
                 adapted = self._adapt_frame_result(fr_ns, frame.shape)
+                if getattr(self, "_enable_registration_var", None) and self._enable_registration_var.get():
+                    self._compute_live_cyclotorsion(frame, adapted)
             except Exception as exc:
                 self.logger.error("Optimised adapt error: %s", exc)
                 continue
@@ -4637,6 +4661,8 @@ class PupilTrackingGUI:
             try:
                 fr_ns = self._dict_to_frame_ns(frame_result)
                 adapted = self._adapt_frame_result(fr_ns, frame.shape)
+                if getattr(self, "_enable_registration_var", None) and self._enable_registration_var.get():
+                    self._compute_live_cyclotorsion(frame, adapted)
             except Exception as exc:
                 self.logger.error("Optimised camera adapt error: %s", exc)
                 continue
@@ -5693,6 +5719,128 @@ class PupilTrackingGUI:
         except Exception:
             return None
 
+    def _attach_cyclotorsion_to_result(self, result: Any, reg_res: Any, image: Optional[np.ndarray] = None) -> None:
+        """Attach cyclotorsion and iris metrics directly to detection result."""
+        if reg_res is not None and getattr(reg_res, "valid", False):
+            t_deg = float(getattr(reg_res, "torsion_deg", 0.0) or 0.0)
+            lat = getattr(self, "_laterality_var", None)
+            lat_val = lat.get() if lat else "OD"
+            if abs(t_deg) < 0.1:
+                direction = "Neutral"
+            elif lat_val == "OD":
+                direction = "Excyclotorsion" if t_deg > 0 else "Intorsion"
+            else:
+                direction = "Intorsion" if t_deg > 0 else "Excyclotorsion"
+            loss_pct = 100.0 * (1.0 - math.cos(2.0 * math.radians(t_deg)))
+
+            setattr(result, "cyclotorsion_deg", t_deg)
+            setattr(result, "cyclotorsion_direction", direction)
+            setattr(result, "cyclotorsion_confidence", getattr(reg_res, "confidence", 1.0))
+            q_val = getattr(getattr(reg_res, "quality", None), "value", str(getattr(reg_res, "quality", "SURGICAL")))
+            setattr(result, "cyclotorsion_quality", q_val)
+            agree_str = f"{getattr(reg_res, 'agreeing_streams', 0)}/{getattr(reg_res, 'active_streams', 0)}"
+            setattr(result, "cyclotorsion_agreeing_streams", agree_str)
+            setattr(result, "cyclotorsion_loss_pct", loss_pct)
+            setattr(result, "cyclotorsion_baseline_frame", getattr(self, "_live_ref_frame_num", 0))
+
+        ir_res = self._get_or_detect_iris(result, image=image)
+        if ir_res is not None and getattr(ir_res, "feature_set", None) is not None:
+            setattr(result, "iris_features_count", len(ir_res.feature_set.features))
+            setattr(result, "iris_roi_valid", bool(ir_res.feature_set.roi.valid))
+
+    def _compute_live_cyclotorsion(self, image: np.ndarray, result: Any) -> Optional[Any]:
+        """Compute live cyclotorsion relative to locked intraoperative baseline reference."""
+        log = getattr(self, "logger", None) or get_logger()
+        if not (getattr(self, "_enable_registration_var", None) and self._enable_registration_var.get()):
+            return None
+        if not getattr(result, "has_both", False):
+            return None
+        if image is None or not isinstance(image, np.ndarray) or image.size == 0:
+            return None
+
+        if getattr(self, "_registration_engine", None) is None:
+            try:
+                from pupil_tracking.registration.engine import RegistrationEngine
+                self._registration_engine = RegistrationEngine()
+            except Exception as e:
+                log.warning("Could not initialize RegistrationEngine: %s", e)
+                return None
+
+        # Lock baseline reference if not yet acquired
+        if getattr(self, "_live_ref_image", None) is None or getattr(self, "_live_ref_result", None) is None:
+            q_val = getattr(getattr(result, "overall_quality", None), "value", str(getattr(result, "overall_quality", "")))
+            conf = getattr(result, "overall_confidence", 0.0) or 0.0
+            if q_val in ("SURGICAL", "CLINICAL") or conf >= 0.70:
+                self._live_ref_image = image.copy()
+                self._live_ref_result = result
+                f_num = getattr(getattr(result, "metadata", None), "frame_number", 0) or 0
+                self._live_ref_frame_num = f_num
+                log.info("Intra-op cyclotorsion baseline locked at frame %d", f_num)
+                from pupil_tracking.utils.types import RegistrationResult, RegistrationQuality
+                n_streams = len(self._registration_engine.streams) if self._registration_engine else 2
+                res0 = RegistrationResult(
+                    valid=True,
+                    torsion_deg=0.0,
+                    confidence=1.0,
+                    quality=RegistrationQuality.SURGICAL,
+                    agreeing_streams=n_streams,
+                    active_streams=n_streams,
+                )
+                self._last_cyclotorsion_result = res0
+                self._attach_cyclotorsion_to_result(result, res0, image=image)
+                return res0
+            return None
+
+        frame_key = (id(result), getattr(getattr(result, "metadata", None), "frame_number", None))
+        if getattr(self, "_last_cyclo_frame_key", None) == frame_key and getattr(self, "_last_cyclotorsion_result", None) is not None:
+            self._attach_cyclotorsion_to_result(result, self._last_cyclotorsion_result, image=image)
+            return self._last_cyclotorsion_result
+
+        try:
+            reg_res = self._registration_engine.register(
+                self._live_ref_image,
+                image,
+                self._live_ref_result,
+                result,
+            )
+            self._last_cyclotorsion_result = reg_res
+            self._last_cyclo_frame_key = frame_key
+            self._attach_cyclotorsion_to_result(result, reg_res, image=image)
+            return reg_res
+        except Exception as err:
+            log.debug("Live registration calculation error: %s", err)
+            return None
+
+    def _reset_cyclotorsion_baseline(self) -> None:
+        """Reset / re-zero the baseline reference frame to the current image and detection."""
+        if getattr(self, "_current_image", None) is not None and getattr(self, "_current_result", None) is not None:
+            if getattr(self._current_result, "has_both", False):
+                self._live_ref_image = self._current_image.copy()
+                self._live_ref_result = self._current_result
+                f_num = getattr(getattr(self._current_result, "metadata", None), "frame_number", 0) or 0
+                self._live_ref_frame_num = f_num
+                from pupil_tracking.utils.types import RegistrationResult, RegistrationQuality
+                n_streams = len(self._registration_engine.streams) if getattr(self, "_registration_engine", None) else 2
+                res0 = RegistrationResult(
+                    valid=True,
+                    torsion_deg=0.0,
+                    confidence=1.0,
+                    quality=RegistrationQuality.SURGICAL,
+                    agreeing_streams=n_streams,
+                    active_streams=n_streams,
+                )
+                self._last_cyclotorsion_result = res0
+                self._attach_cyclotorsion_to_result(self._current_result, res0)
+                self._status_var.set(f"Cyclotorsion baseline zeroed to frame #{f_num}")
+                self._update_measurements(self._current_result)
+                self._refresh_display()
+                return
+        self._live_ref_image = None
+        self._live_ref_result = None
+        self._live_ref_frame_num = 0
+        self._last_cyclotorsion_result = None
+        self._last_cyclo_frame_key = None
+        self._status_var.set("Cyclotorsion baseline cleared (will lock next stable frame)")
 
     def _draw_overlay_scaled(self, out: np.ndarray, result: Any, scale: float) -> None:
         """Draw overlays on an already-resized image with scaled coords."""
