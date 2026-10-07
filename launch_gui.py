@@ -1523,6 +1523,15 @@ def _export_results_csv(results: List[Dict[str, Any]], csv_path: str) -> None:
                 "quality": r.get("overall_quality", ""),
                 "grayscale_mode": r.get("grayscale_mode", ""),
                 "grayscale_applied": r.get("grayscale_applied", ""),
+                "iris_features_count": r.get("iris_features_count", ""),
+                "iris_roi_valid": r.get("iris_roi_valid", ""),
+                "cyclotorsion_deg": r.get("cyclotorsion_deg", ""),
+                "cyclotorsion_direction": r.get("cyclotorsion_direction", ""),
+                "cyclotorsion_confidence": r.get("cyclotorsion_confidence", ""),
+                "cyclotorsion_quality": r.get("cyclotorsion_quality", ""),
+                "cyclotorsion_agreeing_streams": r.get("cyclotorsion_agreeing_streams", ""),
+                "cyclotorsion_loss_pct": r.get("cyclotorsion_loss_pct", ""),
+                "cyclotorsion_baseline_frame": r.get("cyclotorsion_baseline_frame", ""),
             }
         )
 

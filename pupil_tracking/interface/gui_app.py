@@ -5415,6 +5415,19 @@ class PupilTrackingGUI:
             d["ring_center_y"] = ring_center[1]
         d["ring_radius"] = getattr(fr, "ring_radius", None)
         d["ring_dot_count"] = getattr(fr, "ring_dot_count", 0)
+        for attr in [
+            "iris_features_count",
+            "iris_roi_valid",
+            "cyclotorsion_deg",
+            "cyclotorsion_direction",
+            "cyclotorsion_confidence",
+            "cyclotorsion_quality",
+            "cyclotorsion_agreeing_streams",
+            "cyclotorsion_loss_pct",
+            "cyclotorsion_baseline_frame",
+        ]:
+            if hasattr(adapted, attr):
+                d[attr] = getattr(adapted, attr)
         return d
 
     # ================================================================
@@ -7231,6 +7244,16 @@ class PupilTrackingGUI:
                     "quality": r.get("overall_quality", ""),
                     "overall_confidence": _round(r.get("overall_confidence", ""), 3),
                     "grayscale_mode": r.get("grayscale_mode", ""),
+                    # ── Iris Features & Cyclotorsion ──────────────────────
+                    "iris_features_count": r.get("iris_features_count", ""),
+                    "iris_roi_valid": r.get("iris_roi_valid", ""),
+                    "cyclotorsion_deg": _round(r.get("cyclotorsion_deg", ""), 2),
+                    "cyclotorsion_direction": r.get("cyclotorsion_direction", ""),
+                    "cyclotorsion_confidence": _round(r.get("cyclotorsion_confidence", ""), 3),
+                    "cyclotorsion_quality": r.get("cyclotorsion_quality", ""),
+                    "cyclotorsion_agreeing_streams": r.get("cyclotorsion_agreeing_streams", ""),
+                    "cyclotorsion_loss_pct": _round(r.get("cyclotorsion_loss_pct", ""), 2),
+                    "cyclotorsion_baseline_frame": r.get("cyclotorsion_baseline_frame", ""),
                 }
             )
 
