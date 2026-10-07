@@ -186,30 +186,90 @@ class IrisFeatureDetector:
         if self._rl_agent is not None and self._prev_result is not None:
             self._apply_rl_tuning()
 
-        # Phase V: CNN segmentation or classical masking
-        if self._cnn_segmentor is not None and self._cnn_segmentor.available:
-            usable = self._cnn_segmentor.predict(image, roi)
+        h, w = image.shape[:2]
+        max_r = max(roi.limbus_semi_major, roi.limbus_semi_minor)
+        margin = int(np.ceil(max_r)) + 10
+        x0 = max(0, int(np.floor(roi.center_x - margin)))
+        x1 = min(w, int(np.ceil(roi.center_x + margin)))
+        y0 = max(0, int(np.floor(roi.center_y - margin)))
+        y1 = min(h, int(np.ceil(roi.center_y + margin)))
+
+        crop_needed = (x0 > 0 or y0 > 0 or x1 < w or y1 < h)
+        if crop_needed:
+            import copy
+            crop_img = image[y0:y1, x0:x1]
+            crop_occ = external_occlusion[y0:y1, x0:x1] if external_occlusion is not None else None
+
+            roi_crop = copy.copy(roi)
+            roi_crop.center_x -= x0
+            roi_crop.center_y -= y0
+            roi_crop.pupil_center_x -= x0
+            roi_crop.pupil_center_y -= y0
+
+            pupil_crop = copy.copy(pupil) if pupil is not None else None
+            if pupil_crop is not None:
+                pupil_crop.center_x -= x0
+                pupil_crop.center_y -= y0
+
+            limbus_crop = copy.copy(limbus) if limbus is not None else None
+            if limbus_crop is not None:
+                limbus_crop.center_x -= x0
+                limbus_crop.center_y -= y0
+
+            # Phase V: CNN segmentation or classical masking on crop
+            if self._cnn_segmentor is not None and self._cnn_segmentor.available:
+                usable = self._cnn_segmentor.predict(crop_img, roi_crop)
+            else:
+                usable = self.masking.build(crop_img, roi_crop, external_occlusion=crop_occ)
+
+            iris_stats = roi_iris_stats(crop_img, usable, roi_crop)
+
+            feature_set = self.extractor.extract(
+                crop_img,
+                roi_crop,
+                usable,
+                pupil=pupil_crop,
+                limbus=limbus_crop,
+                roi_stats=iris_stats,
+            )
+
+            # Phase V: CNN encoding on crop patches
+            if self._cnn_encoder is not None and self._cnn_encoder.available:
+                self._apply_cnn_encoding(crop_img, feature_set)
+
+            # Shift feature positions back to source-image pixel coordinates
+            for f in feature_set.features:
+                f.x += x0
+                f.y += y0
+
+            feature_set.roi = roi
+            st_mask = mask_stats(usable, roi_crop)
+            feature_set.usable_fraction = st_mask.get("usable_fraction", 0.0)
+            feature_set.region_coverage = self._coverage(feature_set, roi_crop)
         else:
-            usable = self.masking.build(image, roi, external_occlusion=external_occlusion)
+            # Phase V: CNN segmentation or classical masking
+            if self._cnn_segmentor is not None and self._cnn_segmentor.available:
+                usable = self._cnn_segmentor.predict(image, roi)
+            else:
+                usable = self.masking.build(image, roi, external_occlusion=external_occlusion)
 
-        iris_stats = roi_iris_stats(image, usable, roi)
+            iris_stats = roi_iris_stats(image, usable, roi)
 
-        feature_set = self.extractor.extract(
-            image,
-            roi,
-            usable,
-            pupil=pupil,
-            limbus=limbus,
-            roi_stats=iris_stats,
-        )
-        feature_set.usable_fraction = mask_stats(usable, roi).get(
-            "usable_fraction", 0.0
-        )
-        feature_set.region_coverage = self._coverage(feature_set, roi)
+            feature_set = self.extractor.extract(
+                image,
+                roi,
+                usable,
+                pupil=pupil,
+                limbus=limbus,
+                roi_stats=iris_stats,
+            )
+            st_mask = mask_stats(usable, roi)
+            feature_set.usable_fraction = st_mask.get("usable_fraction", 0.0)
+            feature_set.region_coverage = self._coverage(feature_set, roi)
 
-        # Phase V: CNN encoding (replace 16-bin histograms)
-        if self._cnn_encoder is not None and self._cnn_encoder.available:
-            self._apply_cnn_encoding(image, feature_set)
+            # Phase V: CNN encoding
+            if self._cnn_encoder is not None and self._cnn_encoder.available:
+                self._apply_cnn_encoding(image, feature_set)
 
         n_features = len(feature_set.features)
         status = (
@@ -222,7 +282,7 @@ class IrisFeatureDetector:
             valid=n_features > 0,
             status=status,
             feature_set=feature_set,
-            mask_stats=mask_stats(usable, roi),
+            mask_stats=st_mask,
         )
         result.mask_stats.update(iris_stats)
 

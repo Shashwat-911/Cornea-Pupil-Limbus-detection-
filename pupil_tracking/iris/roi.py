@@ -192,15 +192,26 @@ def sample_annulus_mask(shape, roi: IrisROI) -> np.ndarray:
     if not roi.valid:
         return mask
 
-    yy, xx = np.mgrid[0:h, 0:w]
-    px = xx.astype(np.float64) + 0.5
-    py = yy.astype(np.float64) + 0.5
-
-    # Limbus boundary: strictly inside scaled limbus ellipse
     l_cx = roi.center_x
     l_cy = roi.center_y
     l_smaj = max(roi.limbus_semi_major * (1.0 - roi.outer_inset_frac), 1e-6)
     l_smin = max(roi.limbus_semi_minor * (1.0 - roi.outer_inset_frac), 1e-6)
+
+    # Restrict computation to bounding box of the limbus ellipse
+    max_r = max(roi.limbus_semi_major, roi.limbus_semi_minor) + 2.0
+    x0 = max(0, int(np.floor(l_cx - max_r)))
+    x1 = min(w, int(np.ceil(l_cx + max_r)) + 1)
+    y0 = max(0, int(np.floor(l_cy - max_r)))
+    y1 = min(h, int(np.ceil(l_cy + max_r)) + 1)
+
+    if x1 <= x0 or y1 <= y0:
+        return mask
+
+    yy, xx = np.mgrid[y0:y1, x0:x1]
+    px = xx.astype(np.float64) + 0.5
+    py = yy.astype(np.float64) + 0.5
+
+    # Limbus boundary: strictly inside scaled limbus ellipse
     phi_l = np.radians(roi.limbus_angle_deg)
     cos_l, sin_l = np.cos(phi_l), np.sin(phi_l)
     dx_l = px - l_cx
@@ -222,4 +233,5 @@ def sample_annulus_mask(shape, roi: IrisROI) -> np.ndarray:
     yr_p = -dx_p * sin_p + dy_p * cos_p
     outside_pupil = ((xr_p / p_smaj) ** 2 + (yr_p / p_smin) ** 2) >= 1.0
 
-    return inside_limbus & outside_pupil
+    mask[y0:y1, x0:x1] = (inside_limbus & outside_pupil)
+    return mask
