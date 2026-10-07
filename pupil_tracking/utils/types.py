@@ -514,6 +514,15 @@ class EyeDetectionResult:
             "ring_method",
             "image_category",
             "corneal_reference_source",
+            "iris_features_count",
+            "iris_roi_valid",
+            "cyclotorsion_deg",
+            "cyclotorsion_direction",
+            "cyclotorsion_confidence",
+            "cyclotorsion_quality",
+            "cyclotorsion_agreeing_streams",
+            "cyclotorsion_loss_pct",
+            "cyclotorsion_baseline_frame",
         ]:
             if hasattr(self, attr):
                 data[attr] = getattr(self, attr)
