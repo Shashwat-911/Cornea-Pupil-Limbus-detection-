@@ -110,6 +110,22 @@ class EyeROIDetector:
         """Return the best eye ROI for *frame*."""
         fh, fw = frame.shape[:2]
 
+        # 0. Surgical microscope viewport detection for widescreen recording feeds (e.g. Elita)
+        if fw >= int(fh * 1.25):
+            viewport = self._detect_surgical_viewport(frame)
+            if viewport is not None:
+                vx, vy, vw, vh = viewport
+                return ROIResult(
+                    x=vx,
+                    y=vy,
+                    width=vw,
+                    height=vh,
+                    cropped=frame[vy:vy + vh, vx:vx + vw],
+                    is_closeup=True,
+                    from_cache=False,
+                    confidence=0.98,
+                )
+
         # 1. Closeup mode (decided once on first frame)
         if self._closeup_mode is None:
             self._closeup_mode = self._is_eye_closeup(frame)
@@ -287,6 +303,39 @@ class EyeROIDetector:
                     if p > 0 and 4 * np.pi * a / (p * p) > 0.25:
                         return True
         return False
+
+    def _detect_surgical_viewport(self, frame: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
+        """Detect circular surgical microscope camera viewport in widescreen feeds."""
+        fh, fw = frame.shape[:2]
+        gray = self._to_gray(frame)
+        _, thresh = cv2.threshold(gray, 25, 255, cv2.THRESH_BINARY)
+        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        min_area = fh * fw * 0.12
+        max_area = fh * fw * 0.65
+        best_circle = None
+        best_score = 0.0
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            if area < min_area or area > max_area:
+                continue
+            (cx, cy), r = cv2.minEnclosingCircle(cnt)
+            circle_area = np.pi * r * r
+            if circle_area <= 0:
+                continue
+            circularity = area / circle_area
+            if circularity > 0.70 and (0.30 * fh <= r <= 0.60 * fh):
+                score = circularity * area
+                if score > best_score:
+                    best_score = score
+                    best_circle = (int(round(cx)), int(round(cy)), int(round(r)))
+        if best_circle is not None:
+            cx, cy, r = best_circle
+            x0 = max(0, cx - r)
+            y0 = max(0, cy - r)
+            x1 = min(fw, cx + r)
+            y1 = min(fh, cy + r)
+            return (x0, y0, x1 - x0, y1 - y0)
+        return None
 
     # ------------------------------------------------------------------
     # Helpers
