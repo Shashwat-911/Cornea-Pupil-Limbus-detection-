@@ -6106,6 +6106,87 @@ class PupilTrackingGUI:
                         y2 = int(round(fy + 5.0 * scale * np.sin(ang)))
                         cv2.line(out, (fx, fy), (x2, y2), (0, 255, 255), 1, cv2.LINE_AA)
 
+        # ── Cyclotorsion & Intraoperative Rotation HUD Overlay ──
+        if (
+            getattr(self, "_enable_registration_var", None) is not None
+            and self._enable_registration_var.get()
+            and getattr(result, "has_both", False)
+        ):
+            cyclo_res = getattr(self, "_last_cyclotorsion_result", None)
+            if cyclo_res is not None and getattr(cyclo_res, "valid", False):
+                t_deg = float(getattr(cyclo_res, "torsion_deg", 0.0) or 0.0)
+                conf = float(getattr(cyclo_res, "confidence", 0.0) or 0.0)
+
+                le = result.limbus.ellipse
+                cx = int(round(le.center_x * scale))
+                cy = int(round(le.center_y * scale))
+                r_arc = max(18, int(round(le.radius * 0.70 * scale)))
+                r_axis = max(28, int(round(le.radius * 1.15 * scale)))
+
+                # Reference 12 o'clock line (white)
+                ref_pt = (cx, max(0, cy - r_axis))
+                cv2.line(out, (cx, cy), ref_pt, (255, 255, 255), 1, cv2.LINE_AA)
+                cv2.circle(out, ref_pt, max(2, int(3 * scale)), (255, 255, 255), -1)
+
+                # Rotated surgical axis line
+                angle_rad = math.radians(-t_deg - 90.0)
+                rot_x = int(round(cx + r_axis * math.cos(angle_rad)))
+                rot_y = int(round(cy + r_axis * math.sin(angle_rad)))
+
+                if conf >= 0.85:
+                    c_color = (0, 255, 0)
+                elif conf >= 0.60:
+                    c_color = (0, 255, 255)
+                else:
+                    c_color = (0, 165, 255)
+
+                cv2.line(out, (cx, cy), (rot_x, rot_y), c_color, 2, cv2.LINE_AA)
+                cv2.circle(out, (rot_x, rot_y), max(2, int(4 * scale)), c_color, -1)
+
+                if abs(t_deg) >= 0.2:
+                    start_a = -90.0
+                    end_a = start_a - t_deg
+                    cv2.ellipse(out, (cx, cy), (r_arc, r_arc), 0, min(start_a, end_a), max(start_a, end_a), c_color, 2, cv2.LINE_AA)
+
+                lat = getattr(self, "_laterality_var", None)
+                lat_val = lat.get() if lat else "OD"
+                if abs(t_deg) < 0.1:
+                    dir_str = "Neutral"
+                elif lat_val == "OD":
+                    dir_str = "Excyclo" if t_deg > 0 else "Incyclo"
+                else:
+                    dir_str = "Incyclo" if t_deg > 0 else "Excyclo"
+
+                hud_label = f"CYC: {t_deg:+.2f}deg ({dir_str}) [{conf:.0%}]"
+                font_scale_hud = max(0.32, 0.45 * scale)
+                lbl_size = cv2.getTextSize(hud_label, cv2.FONT_HERSHEY_SIMPLEX, font_scale_hud, 1)[0]
+                lbl_x = max(10, cx - lbl_size[0] // 2)
+                lbl_y = max(22, cy - r_axis - int(8 * scale))
+                cv2.rectangle(
+                    out,
+                    (lbl_x - 4, lbl_y - lbl_size[1] - 4),
+                    (lbl_x + lbl_size[0] + 4, lbl_y + 4),
+                    (20, 20, 20),
+                    -1,
+                )
+                cv2.rectangle(
+                    out,
+                    (lbl_x - 4, lbl_y - lbl_size[1] - 4),
+                    (lbl_x + lbl_size[0] + 4, lbl_y + 4),
+                    c_color,
+                    1,
+                )
+                cv2.putText(
+                    out,
+                    hud_label,
+                    (lbl_x, lbl_y),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    font_scale_hud,
+                    c_color,
+                    1,
+                    cv2.LINE_AA,
+                )
+
         # ── Limbal Purple Ink Marker (Gentian Violet) Overlay ──
         if (
             getattr(self, "_enable_registration_var", None) is not None
