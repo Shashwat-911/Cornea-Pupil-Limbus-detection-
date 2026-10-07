@@ -1119,6 +1119,29 @@ class PupilTrackingGUI:
                 ],
             ),
             (
+                "IRIS ROI & FEATURES",
+                self._hex_to_bgr(self._colors.OFFSET),
+                [
+                    ("ROI Status", self._ir_vars["status"].get() if hasattr(self, "_ir_vars") else "---"),
+                    ("Annulus", self._ir_vars["annulus"].get() if hasattr(self, "_ir_vars") else "---"),
+                    ("Features", self._ir_vars["features"].get() if hasattr(self, "_ir_vars") else "---"),
+                    ("Coverage", self._ir_vars["coverage"].get() if hasattr(self, "_ir_vars") else "---"),
+                    ("Quality", self._ir_vars["quality"].get() if hasattr(self, "_ir_vars") else "---"),
+                ],
+            ),
+            (
+                "CYCLOTORSION & ROTATION",
+                self._hex_to_bgr(self._colors.PUPIL),
+                [
+                    ("Torsion Angle", self._cyclo_vars["angle"].get() if hasattr(self, "_cyclo_vars") else "0.00 deg"),
+                    ("Direction", self._cyclo_vars["direction"].get() if hasattr(self, "_cyclo_vars") else "None"),
+                    ("Confidence", self._cyclo_vars["confidence"].get() if hasattr(self, "_cyclo_vars") else "---"),
+                    ("Agreed Streams", self._cyclo_vars["streams"].get() if hasattr(self, "_cyclo_vars") else "---"),
+                    ("Astigmatic Loss", self._cyclo_vars["loss"].get() if hasattr(self, "_cyclo_vars") else "0.0%"),
+                    ("Baseline Status", self._cyclo_vars["baseline"].get() if hasattr(self, "_cyclo_vars") else "---"),
+                ],
+            ),
+            (
                 "PROCESSING",
                 self._hex_to_bgr(self._colors.PROCESSING),
                 [
@@ -1230,8 +1253,8 @@ class PupilTrackingGUI:
             cv2.putText(panel, self._ascii_for_capture(value or "---"), (x0 + 10, y0 + 46), cv2.FONT_HERSHEY_SIMPLEX, 0.58, color, 2, cv2.LINE_AA)
 
         sections = self._measurement_capture_sections()
-        left_sections = sections[:2]
-        right_sections = sections[2:]
+        left_sections = sections[:3]
+        right_sections = sections[3:]
         start_y = pad * 2 + summary_box_h * 2 + summary_gap
 
         def draw_section_column(items, x_start):
@@ -2405,7 +2428,31 @@ class PupilTrackingGUI:
         self._ir_vars["coverage"] = add_row(iris_card, "Spatial Coverage:")
         self._ir_vars["quality"] = add_row(iris_card, "Feature Quality:")
 
-        proc_frame = add_card(cards_outer, "PROCESSING", "ProcHeader.TLabel", 4, 0, 2)
+        cyclo_card = add_card(
+            cards_outer, "CYCLOTORSION & INTRA-OP ROTATION", "CalibHeader.TLabel", 4, 0, 2
+        )
+        self._cyclo_vars: Dict[str, tk.StringVar] = {}
+        self._cyclo_vars["angle"] = add_row(cyclo_card, "Torsion Angle:")
+        self._cyclo_vars["direction"] = add_row(cyclo_card, "Direction:")
+        self._cyclo_vars["confidence"] = add_row(cyclo_card, "Confidence:")
+        self._cyclo_vars["streams"] = add_row(cyclo_card, "Agreed Streams:")
+        self._cyclo_vars["loss"] = add_row(cyclo_card, "Astigmatic Loss:")
+        self._cyclo_vars["baseline"] = add_row(cyclo_card, "Baseline Status:")
+
+        btn_frame = ttk.Frame(cyclo_card, style="Card.TFrame")
+        btn_frame.pack(fill="x", padx=4, pady=4)
+        ttk.Button(
+            btn_frame,
+            text="🎯 Re-Zero Baseline (0.0°)",
+            command=self._reset_cyclotorsion_baseline,
+        ).pack(side="left", fill="x", expand=True, padx=2)
+        ttk.Button(
+            btn_frame,
+            text="🔬 Doctor Review",
+            command=self._open_cyclotorsion_review_popup,
+        ).pack(side="right", fill="x", expand=True, padx=2)
+
+        proc_frame = add_card(cards_outer, "PROCESSING", "ProcHeader.TLabel", 5, 0, 2)
         self._proc_time_var = add_row(proc_frame, "Proc. Time:")
         self._latency_var = add_row(proc_frame, "Latency:")
         self._latency_avg_var = add_row(proc_frame, "Latency Avg:")
@@ -2415,16 +2462,6 @@ class PupilTrackingGUI:
         self._frame_var = add_row(proc_frame, "Frame:")
         self._image_size_var = add_row(proc_frame, "Image Size:")
         self._pipeline_var = add_row(proc_frame, "Pipeline:")
-
-        ttk.Button(
-            cards_outer,
-            text="🔬 Open Cyclotorsion Doctor Review Popup",
-            command=self._open_cyclotorsion_review_popup,
-        ).grid(row=5, column=0, columnspan=2, sticky="ew", padx=3, pady=6)
-
-        # ==========================================================
-        # GRAYSCALE GUI 9 of 12 — Grayscale info in measurements
-        # ══════════════════════════════════════════════════════════
         self._gray_mode_var_display = add_row(proc_frame, "Grayscale:")
 
 
@@ -6802,6 +6839,33 @@ class PupilTrackingGUI:
             elif hasattr(self, "_ir_vars"):
                 for var in self._ir_vars.values():
                     var.set("---")
+
+            # ── Cyclotorsion & Intraoperative Rotation Card ──
+            if hasattr(self, "_cyclo_vars"):
+                t_deg = getattr(result, "cyclotorsion_deg", None)
+                if t_deg is not None and getattr(self, "_enable_registration_var", None) and self._enable_registration_var.get():
+                    direction = getattr(result, "cyclotorsion_direction", "Neutral")
+                    conf = getattr(result, "cyclotorsion_confidence", 1.0)
+                    q_str = getattr(result, "cyclotorsion_quality", "SURGICAL")
+                    streams = getattr(result, "cyclotorsion_agreeing_streams", "2/2")
+                    loss_pct = getattr(result, "cyclotorsion_loss_pct", 0.0)
+                    b_frame = getattr(result, "cyclotorsion_baseline_frame", 0)
+
+                    self._cyclo_vars["angle"].set(f"{float(t_deg):+.2f}°")
+                    self._cyclo_vars["direction"].set(f"{direction}")
+                    self._cyclo_vars["confidence"].set(f"{float(conf)*100:.1f}% ({q_str})")
+                    self._cyclo_vars["streams"].set(f"{streams} streams")
+                    self._cyclo_vars["loss"].set(f"{float(loss_pct):.2f}% astig. loss")
+                    base_str = f"Locked (Frame #{b_frame})" if b_frame > 0 else "Baseline Active"
+                    self._cyclo_vars["baseline"].set(base_str)
+                else:
+                    reg_on = getattr(self, "_enable_registration_var", None) and self._enable_registration_var.get()
+                    self._cyclo_vars["angle"].set("---" if not reg_on else "0.00°")
+                    self._cyclo_vars["direction"].set("OFF" if not reg_on else "Acquiring...")
+                    self._cyclo_vars["confidence"].set("---")
+                    self._cyclo_vars["streams"].set("---")
+                    self._cyclo_vars["loss"].set("0.0%")
+                    self._cyclo_vars["baseline"].set("Disabled" if not reg_on else "Pending Lock")
 
 
             proc_ms = float(getattr(result.metadata, "processing_time_ms", 0.0) or 0.0)
