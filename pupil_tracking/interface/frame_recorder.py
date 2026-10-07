@@ -207,6 +207,11 @@ class FrameRecorder:
 
                 frame, timestamp = frame_data
 
+                if frame.ndim == 2:
+                    frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+                elif frame.ndim == 3 and frame.shape[2] == 1:
+                    frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+
                 # Write frame
                 if self._writer is not None and self._writer.isOpened():
                     self._writer.write(frame)
@@ -254,8 +259,13 @@ class FrameRecorder:
         Returns:
             True if frame was queued, False if dropped
         """
-        if not self.is_recording:
+        if not self.is_recording or frame is None:
             return False
+
+        if frame.ndim == 2:
+            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+        elif frame.ndim == 3 and frame.shape[2] == 1:
+            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
 
         # Validate frame dimensions
         if frame.shape[1] != self._width or frame.shape[0] != self._height:

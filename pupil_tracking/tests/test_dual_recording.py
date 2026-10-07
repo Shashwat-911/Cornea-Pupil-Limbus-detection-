@@ -77,3 +77,31 @@ def test_dual_stream_concurrent_recording(tmp_path: Path):
 
     cap_raw.release()
     cap_overlay.release()
+
+
+def test_grayscale_single_channel_recording(tmp_path: Path):
+    """Verify that single-channel 2D grayscale frames are recorded as 3-channel video without errors."""
+    gray_path = str(tmp_path / "grayscale_test.mp4")
+    rec = FrameRecorder(name="gray")
+    width, height, fps = 320, 240, 30.0
+
+    assert rec.start(gray_path, width, height, fps) is True
+    for _ in range(10):
+        # 1-channel grayscale frame (2D array)
+        gray_frame = np.full((height, width), 128, dtype=np.uint8)
+        assert rec.write(gray_frame) is True
+        time.sleep(0.005)
+
+    time.sleep(0.1)
+    saved = rec.stop()
+    assert saved == gray_path
+    assert Path(gray_path).exists()
+    assert Path(gray_path).stat().st_size > 0
+
+    cap = cv2.VideoCapture(gray_path)
+    assert cap.isOpened()
+    ret, frame = cap.read()
+    assert ret is True
+    assert frame.shape == (height, width, 3)
+    cap.release()
+
