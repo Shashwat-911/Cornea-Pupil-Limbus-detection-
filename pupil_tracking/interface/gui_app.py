@@ -47,6 +47,7 @@ from pupil_tracking.core.corneal_center import CornealCenterCalculator
 from pupil_tracking.utils.types import (
     DetectionQuality,
     CalibrationInfo,
+    EllipseParams,
 )
 from pupil_tracking.utils.config import get_config
 from pupil_tracking.utils.logger import get_logger
@@ -4260,12 +4261,13 @@ class PupilTrackingGUI:
                         )
                         self.root.after(0, self._on_video_complete)
                         break
+                    pending_end = False
                     # Drain queued backlog to keep display and processing latency minimal (< 100ms)
                     while frame_queue.qsize() > 1:
                         try:
                             fresher_item = frame_queue.get_nowait()
                             if fresher_item is None:
-                                item = None
+                                pending_end = True
                                 break
                             item = fresher_item
                         except _queue.Empty:
@@ -5161,9 +5163,9 @@ class PupilTrackingGUI:
                 offset_angle_deg=0.0,
             )
         meta = SimpleNamespace(
-            processing_time_ms=fr.processing_ms,
-            latency_ms=getattr(fr, "latency_ms", fr.processing_ms),
-            frame_number=fr.frame_number,
+            processing_time_ms=getattr(fr, "processing_ms", 0.0),
+            latency_ms=getattr(fr, "latency_ms", getattr(fr, "processing_ms", 0.0)),
+            frame_number=getattr(fr, "frame_number", 0),
             image_width=W,
             image_height=H,
             source="camera (optimised)",
@@ -5171,9 +5173,9 @@ class PupilTrackingGUI:
             reuse_reason=getattr(fr, "reuse_reason", None),
         )
         alerts: List[str] = []
-        if fr.is_interpolated:
+        if getattr(fr, "is_interpolated", False):
             alerts.append("⚡ Interpolated frame (Kalman prediction)")
-        if fr.quality is not None and fr.quality.value == "FAILED":
+        if fr.quality is not None and getattr(fr.quality, "value", "") == "FAILED":
             alerts.append("⚠ Detection failed this frame")
 
         result = SimpleNamespace(
