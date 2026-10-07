@@ -596,7 +596,11 @@ def _candidate_evidence(
               float(config.global_consistency_inlier_tol_deg))
     inl = np.asarray([circular_distance(float(center), float(x)) <= tol
                       for x in t], dtype=bool)
-    return float(np.sum(w[inl]))
+    inlier_mass = float(np.sum(w[inl]))
+    total_mass = float(np.sum(w))
+    if total_mass > 0 and (inlier_mass / total_mass) < config.global_consistency_min_inlier_frac:
+        return 0.0
+    return inlier_mass
 
 
 # --------------------------------------------------------------------------- #
@@ -615,7 +619,7 @@ def _radial_bounds_np(roi: IrisROI, angles_deg: np.ndarray) -> Tuple[np.ndarray,
         phi = np.radians(float(phi_ell_deg))
         cost = np.cos(ang - phi)
         sint = np.sin(ang - phi)
-        denom = (sint / smaj) ** 2 + (cost / smin) ** 2
+        denom = (cost / smaj) ** 2 + (sint / smin) ** 2
         r = np.where(denom > 1e-12, 1.0 / np.sqrt(np.maximum(denom, 1e-12)),
                      max(smaj, smin))
         return r
@@ -1099,7 +1103,7 @@ def estimate_correspondence(
         weight_matrix = conf
     aligns = _coarse_alignments(fa, fb, baseline, cfg, weight_matrix)
 
-    if cfg.refine and cfg.top_k_coarse > 1:
+    if cfg.refine and cfg.top_k_coarse > 1 and baseline == MatchingBaseline.GEOMETRIC_DESCRIPTOR:
         # Multi-hypothesis refinement: the score-argmax coarse baseline is
         # periodically ambiguous on low-information textures (an angularly
         # symmetric iris is a deliberately hard case). Refine the top-K

@@ -1148,6 +1148,8 @@ def _draw_cli_overlay(
                     cv2.LINE_AA,
                 )
             for feat in iris_res.feature_set.features:
+                if not feat.valid:
+                    continue
                 fx, fy = int(round(feat.x)), int(round(feat.y))
                 cv2.circle(out, (fx, fy), 2, (0, 255, 255), -1)
                 cv2.circle(out, (fx, fy), 4, (255, 0, 255), 1, cv2.LINE_AA)

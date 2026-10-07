@@ -42,7 +42,7 @@ def _ellipse_radius_at_angle(
     phi = math.radians(ell_angle_deg)
     cost = math.cos(ang - phi)
     sint = math.sin(ang - phi)
-    denom = (sint / a) ** 2 + (cost / b) ** 2
+    denom = (cost / a) ** 2 + (sint / b) ** 2
     if denom <= 1e-12:
         return max(a, b)
     return 1.0 / math.sqrt(denom)

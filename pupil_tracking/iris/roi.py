@@ -90,6 +90,8 @@ class IrisROIExtractor:
         # Reference for pixel-space sanity checks: the absolute mean radii.
         roi.center_x = float(limbus.center_x)
         roi.center_y = float(limbus.center_y)
+        roi.pupil_center_x = float(pupil.center_x)
+        roi.pupil_center_y = float(pupil.center_y)
         roi.pupil_semi_major = float(pupil.semi_major)
         roi.pupil_semi_minor = float(pupil.semi_minor)
         roi.pupil_angle_deg = float(pupil.angle_deg)
@@ -138,30 +140,52 @@ class IrisROIExtractor:
 
 
 def point_in_roi_annulus(x: float, y: float, roi: IrisROI) -> bool:
-    """Return True if a point lies within the iris annulus (ignoring insets).
+    """Return True if a point lies within the iris annulus with insets applied.
 
-    Uses a ray-from-centre test: the point is accepted when its distance from
-    the centre is between the inner (pupil) and outer (limbus) radii of the
-    ellipse along that angle. The inset fractions are applied.
+    Evaluated in each ellipse's respective coordinate frame (handling decentered
+    and eccentric geometry exactly).
     """
     if not roi.valid:
         return False
-    dx = x - roi.center_x
-    dy = y - roi.center_y
-    angle_deg = math.degrees(math.atan2(dy, dx)) % 360.0
 
-    inner_r = roi.pupil_radius_px * (1.0 + roi.inner_inset_frac)
-    outer_r = roi.limbus_radius_px * (1.0 - roi.outer_inset_frac)
-    dist = math.hypot(dx, dy)
-    return inner_r < dist < outer_r
+    # Check inside limbus (with outer inset)
+    l_smaj = roi.limbus_semi_major * (1.0 - roi.outer_inset_frac)
+    l_smin = roi.limbus_semi_minor * (1.0 - roi.outer_inset_frac)
+    if l_smaj <= 0 or l_smin <= 0:
+        return False
+    phi_l = math.radians(roi.limbus_angle_deg)
+    dx_l = x - roi.center_x
+    dy_l = y - roi.center_y
+    xr_l = dx_l * math.cos(phi_l) + dy_l * math.sin(phi_l)
+    yr_l = -dx_l * math.sin(phi_l) + dy_l * math.cos(phi_l)
+    if (xr_l / l_smaj) ** 2 + (yr_l / l_smin) ** 2 > 1.0:
+        return False
+
+    # Check outside pupil (with inner inset)
+    p_cx = roi.pupil_center_x if roi.pupil_center_x != 0.0 else roi.center_x
+    p_cy = roi.pupil_center_y if roi.pupil_center_y != 0.0 else roi.center_y
+    p_smaj = roi.pupil_semi_major * (1.0 + roi.inner_inset_frac)
+    p_smin = roi.pupil_semi_minor * (1.0 + roi.inner_inset_frac)
+    if p_smaj <= 0 or p_smin <= 0:
+        return True
+    phi_p = math.radians(roi.pupil_angle_deg)
+    dx_p = x - p_cx
+    dy_p = y - p_cy
+    xr_p = dx_p * math.cos(phi_p) + dy_p * math.sin(phi_p)
+    yr_p = -dx_p * math.sin(phi_p) + dy_p * math.cos(phi_p)
+    if (xr_p / p_smaj) ** 2 + (yr_p / p_smin) ** 2 < 1.0:
+        return False
+
+    return True
 
 
 def sample_annulus_mask(shape, roi: IrisROI) -> np.ndarray:
     """Return a boolean (H, W) mask marking iris-annulus pixels.
 
-    The annulus is defined by the actual pupil and limbus ellipse boundaries
-    at each angle, not by a circular mean-radius approximation.  This
-    correctly handles non-concentric and non-circular geometry.
+    The annulus is defined by the actual pupil and limbus ellipse boundaries,
+    evaluated in each ellipse's respective coordinate frame with insets applied.
+    This guarantees exact handling of non-concentric and rotated geometry with
+    zero leakage into the sclera or inner pupil.
     """
     h, w = shape[:2]
     mask = np.zeros((h, w), dtype=bool)
@@ -169,28 +193,33 @@ def sample_annulus_mask(shape, roi: IrisROI) -> np.ndarray:
         return mask
 
     yy, xx = np.mgrid[0:h, 0:w]
-    dx = (xx - roi.center_x).astype(np.float64)
-    dy = (yy - roi.center_y).astype(np.float64)
-    dist = np.sqrt(dx * dx + dy * dy)
-    angles_rad = np.arctan2(dy, dx)
+    px = xx.astype(np.float64) + 0.5
+    py = yy.astype(np.float64) + 0.5
 
-    def _ellipse_r_at_angles(semi_a, semi_b, ell_angle_deg, angles):
-        phi = np.radians(ell_angle_deg)
-        diff = angles - phi
-        c = np.cos(diff)
-        s = np.sin(diff)
-        denom = (s / semi_a) ** 2 + (c / semi_b) ** 2
-        denom = np.maximum(denom, 1e-12)
-        return 1.0 / np.sqrt(denom)
+    # Limbus boundary: strictly inside scaled limbus ellipse
+    l_cx = roi.center_x
+    l_cy = roi.center_y
+    l_smaj = max(roi.limbus_semi_major * (1.0 - roi.outer_inset_frac), 1e-6)
+    l_smin = max(roi.limbus_semi_minor * (1.0 - roi.outer_inset_frac), 1e-6)
+    phi_l = np.radians(roi.limbus_angle_deg)
+    cos_l, sin_l = np.cos(phi_l), np.sin(phi_l)
+    dx_l = px - l_cx
+    dy_l = py - l_cy
+    xr_l = dx_l * cos_l + dy_l * sin_l
+    yr_l = -dx_l * sin_l + dy_l * cos_l
+    inside_limbus = ((xr_l / l_smaj) ** 2 + (yr_l / l_smin) ** 2) <= 1.0
 
-    inner = _ellipse_r_at_angles(
-        roi.pupil_semi_major, roi.pupil_semi_minor,
-        roi.pupil_angle_deg, angles_rad,
-    ) * (1.0 + roi.inner_inset_frac)
-    outer = _ellipse_r_at_angles(
-        roi.limbus_semi_major, roi.limbus_semi_minor,
-        roi.limbus_angle_deg, angles_rad,
-    ) * (1.0 - roi.outer_inset_frac)
+    # Pupil boundary: strictly outside scaled pupil ellipse
+    p_cx = roi.pupil_center_x if roi.pupil_center_x != 0.0 else roi.center_x
+    p_cy = roi.pupil_center_y if roi.pupil_center_y != 0.0 else roi.center_y
+    p_smaj = max(roi.pupil_semi_major * (1.0 + roi.inner_inset_frac), 1e-6)
+    p_smin = max(roi.pupil_semi_minor * (1.0 + roi.inner_inset_frac), 1e-6)
+    phi_p = np.radians(roi.pupil_angle_deg)
+    cos_p, sin_p = np.cos(phi_p), np.sin(phi_p)
+    dx_p = px - p_cx
+    dy_p = py - p_cy
+    xr_p = dx_p * cos_p + dy_p * sin_p
+    yr_p = -dx_p * sin_p + dy_p * cos_p
+    outside_pupil = ((xr_p / p_smaj) ** 2 + (yr_p / p_smin) ** 2) >= 1.0
 
-    mask = (dist >= inner) & (dist <= outer)
-    return mask
+    return inside_limbus & outside_pupil

@@ -21,7 +21,17 @@ def valid_geometry(pupil, limbus, shape):
                 or max(e.semi_major, e.semi_minor) > max(h, w)
                 or not (0 <= e.center_x < w and 0 <= e.center_y < h)):
             return False
-    return limbus.radius > pupil.radius * 1.1
+    if limbus.radius <= pupil.radius * 1.1:
+        return False
+    # Check the pupil perimeter in the limbus coordinate frame. Radius alone
+    # allows disjoint or crossing ellipses to masquerade as an iris annulus.
+    t = np.linspace(0, 2 * np.pi, 128, endpoint=False)
+    p, l = np.deg2rad([pupil.angle_deg, limbus.angle_deg])
+    x, y = pupil.semi_major * np.cos(t), pupil.semi_minor * np.sin(t)
+    dx = pupil.center_x - limbus.center_x + x * np.cos(p) - y * np.sin(p)
+    dy = pupil.center_y - limbus.center_y + x * np.sin(p) + y * np.cos(p)
+    lx, ly = dx * np.cos(l) + dy * np.sin(l), -dx * np.sin(l) + dy * np.cos(l)
+    return bool(np.all((lx / limbus.semi_major)**2 + (ly / limbus.semi_minor)**2 < 1))
 
 
 def registration_mask(image):
@@ -67,6 +77,8 @@ class AngularMatch:
     peak_margin: float = 0.0
     band_spread_deg: float = 0.0
     reason: str = "insufficient_texture"
+    band_angles: tuple = ()
+    uncertainty_deg: float = 0.0
 
 
 def masked_angular_match(ref, curr, mask_ref=None, mask_curr=None, max_degrees=30.0,
@@ -84,6 +96,8 @@ averaging it away. Radial bands provide a second consistency check.
         return AngularMatch(reason="nonfinite_input")
     if not 0 < max_degrees < 180:
         raise ValueError("max_degrees must be between 0 and 180")
+    if any(mask is not None and not np.isfinite(mask).all() for mask in (mask_ref, mask_curr)):
+        return AngularMatch(reason="nonfinite_mask")
     ma = np.ones_like(a) if mask_ref is None else (np.asarray(mask_ref) > 0).astype(np.float32)
     mb = np.ones_like(b) if mask_curr is None else (np.asarray(mask_curr) > 0).astype(np.float32)
     if ma.shape != a.shape or mb.shape != b.shape:
@@ -153,18 +167,31 @@ averaging it away. Radial bands provide a second consistency check.
     competing = allowed & (dist > max(2, n * 2 / 360))
     margin = float(score[peak] - np.max(score[competing])) if competing.any() else 0.0
     bands = []
+    band_angles = []
     for i, band_size in enumerate(band_sizes):
         bs, _ = scores(terms[:, i:i+1], band_size)
         j = int(np.argmax(bs))
         if bs[j] >= .30:
-            bands.append(float(shifts[j] * 360 / n))
+            yl_b, yc_b, yr_b = bs[(j - 1) % n], bs[j], bs[(j + 1) % n]
+            denom_b = yl_b - 2 * yc_b + yr_b
+            delta_b = float(np.clip(.5 * (yl_b - yr_b) / denom_b, -.5, .5)) if denom_b < -1e-8 else 0.0
+            b_angle = float((shifts[j] + delta_b) * 360 / n)
+            bands.append(b_angle)
+            band_angles.append(b_angle)
+        else:
+            band_angles.append(float("nan"))
     spread = float(np.ptp(bands)) if len(bands) >= 2 else 180.0
     yl, yc, yr = score[(peak - 1) % n], score[peak], score[(peak + 1) % n]
     denominator = yl - 2 * yc + yr
     delta = float(np.clip(.5 * (yl - yr) / denominator, -.5, .5)) if denominator < -1e-8 else 0.
+    curv = max(float(-denominator), 1e-6)
+    snr = max(float(score[peak]) / max(1.0 - float(score[peak]), 0.01), 0.1)
+    uncertainty = float(np.clip((360.0 / n) / (curv * np.sqrt(snr) * 10.0), 0.001, 10.0))
     valid = margin >= .035 and spread <= 2.0
     return AngularMatch(
         angle_deg=float((shifts[peak] + delta) * 360 / n), valid=bool(valid),
         score=float(score[peak]), overlap=float(overlap[peak]), peak_margin=margin,
         band_spread_deg=spread, reason="" if valid else "ambiguous_or_inconsistent_bands",
+        band_angles=tuple(band_angles), uncertainty_deg=uncertainty,
     )
+

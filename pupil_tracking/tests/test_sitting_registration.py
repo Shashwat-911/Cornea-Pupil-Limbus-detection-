@@ -100,11 +100,13 @@ def test_invalid_frame_cannot_update_temporal_state_or_report_final_angle():
     det = make_elita_detection((256, 256))
     good = engine.register(ref, rotate_image(ref, 3, (256, 256)), elita_detection=det, mode="dynamic")
     assert good.valid
-    previous = engine._last_smooth_theta
     bad = engine.register(ref, np.full_like(ref, 120), elita_detection=det, mode="dynamic")
     assert not bad.valid and bad.final_sitting_to_supine_deg is None
     assert bad.confidence == 0 and bad.torsion_direction == "UNAVAILABLE"
-    assert engine._last_smooth_theta == previous
+    assert engine._last_smooth_theta is None
+    recovered = engine.register(ref, rotate_image(ref, -8, (256, 256)),
+                                elita_detection=det, mode="dynamic")
+    assert recovered.valid and abs(recovered.rotation_deg + 8) < .5
 
 
 def test_reference_geometry_change_invalidates_polar_cache():

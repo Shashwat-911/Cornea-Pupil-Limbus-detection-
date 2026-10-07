@@ -198,6 +198,11 @@ class EllipseParams:
     eccentricity: float = 0.0
     circularity: float = 1.0
 
+    def __post_init__(self) -> None:
+        if self.semi_minor > self.semi_major > 0:
+            self.semi_major, self.semi_minor = self.semi_minor, self.semi_major
+            self.angle_deg = (self.angle_deg + 90.0) % 180.0
+
     # ── derived properties ──────────────────────────────────────────
 
     @property

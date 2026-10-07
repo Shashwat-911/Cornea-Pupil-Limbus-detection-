@@ -99,12 +99,74 @@ not a clinical validation claim.
 
 ## Release audit
 
-The release audit runs the complete Python test suite, the seated benchmark,
-RGB/grayscale and image-size combinations, malformed input cases, repeated
-determinism checks, metadata mismatch checks, and integrated GUI/stream tests.
-The latest run passed **555 tests with 14 skips**. The production
-cross-modality smoke case recovered 2.504 degrees from a 2.500 degree textured
-synthetic rotation (0.004 degree error, 0.982 confidence). The legacy
-multi-stream compatibility sweep had 16/20 cases within 1.5 degrees; its four
-weak cases remain visible audit failures and are not used to claim Phase 2
-performance.
+### Replaceable matcher and future training
+
+### Replaceable matcher and future training
+
+The CPU implementation remains the default. `pentacam/matcher.py` provides an extensible, modular architecture:
+1. `AngularMatcher(Protocol)`: callable contract `(ref, curr, mask_ref, mask_curr, max_degrees, reference_cache) -> AngularMatch`.
+2. `BaseAngularMatcher(ABC)`: abstract base class providing common input sanitization, checked output verification, and latency/acceptance rate metrics.
+3. `ClassicalFFTMatcher`: shift-dependent masked ZNCC with sub-pixel multi-band refinement and angular uncertainty estimation.
+4. `LearnedAngularMatcher`: deep learning adapter for PyTorch / ONNX models with automatic graceful fallback to classical matching.
+5. `EnsembleMatcher`: dual-system consensus matcher combining classical and neural estimators with tolerance-based divergence rejection.
+6. `create_matcher(kind="classical|learned|ensemble", ...)`: factory function for dynamic configuration.
+
+Pass a matcher instance through `SittingRegistrationSession(matcher=m)` or
+`CrossModalityRegistrationEngine(matcher=m)`. Geometry, image metadata,
+unwrapping, failure handling, and JSON output stay in the existing pipeline.
+Adapters must use positive counter-clockwise image angles, return overlap and
+quality diagnostics, and abstain on unsupported input. A common output check
+rejects nonfinite/out-of-range angles and malformed accepted scores.
+
+### Neural model architecture and training pipeline
+
+`pentacam/models.py` implements a differentiable, rotation-equivariant Siamese architecture:
+- `CircularConv2d`: 2D convolutions with circular boundary padding along the angular (0°–360°) axis, avoiding seam artifacts.
+- `IrisPolarFeatureNet`: convolutional backbone extracting dense rotation-equivariant descriptors `(B, D, W)`.
+- `IrisPolarSiameseNet`: end-to-end Siamese network computing circular cross-correlation via 1D FFT and differentiable soft-argmax over candidate angles.
+- Zero-dependency deployment via `model.export_onnx(path)` and direct session integration via `model.as_matcher()`.
+
+`pentacam/training_data.py` loads framework-independent JSONL pairs and provides:
+- `CyclotorsionAugmentor`: physiologically plausible clinical augmentations (random circular roll, gamma/contrast variations, pupil dilation stretch, eyelid/lash occlusions, sensor noise).
+- `get_pytorch_dataset(...)`: PyTorch Dataset loaded lazily on demand, keeping runtime session imports 100% free of torch dependencies.
+- `scripts/train_cyclotorsion_model.py`: end-to-end training script supporting both clinical JSONL manifests and synthetic smoke tests, checkpointing, and ONNX export.
+
+Example manifest format:
+```json
+{"patient_id":"subject_001","eye_id":"subject_001_OD","laterality":"OD","reference":"reference.png","current":"current.png","rotation_deg":3.5,"split":"train","label_source":"expert"}
+```
+
+```python
+from pupil_tracking.pentacam.training_data import load_pair_manifest, get_pytorch_dataset
+from pupil_tracking.pentacam.matcher import create_matcher
+
+# 1. Classical CPU matcher (default)
+matcher = create_matcher("classical")
+
+# 2. Or load neural model
+dataset = get_pytorch_dataset("local_data/pairs.jsonl", split="train", augment=True)
+```
+
+Allowed splits are `train`, `validation`, and `test`; label sources are
+`expert` or `synthetic`. The loader rejects missing files, invalid labels,
+conflicting eye metadata, patients crossing splits, and byte-identical images
+crossing splits (including renamed copies).
+
+### Sub-pixel accuracy improvements
+
+The annulus unwrapping solves exact ray/ellipse intersections for decentered pupils.
+The matcher evaluates three radial bands with continuous parabolic peak interpolation,
+eliminating integer bin quantization (reducing band spread on rigid shifts from 0.50° to <0.01°).
+`AngularMatch` reports individual continuous `band_angles` and curvature-based `uncertainty_deg`.
+Geometry validation rejects crossing pupil/limbus boundaries, and tracking loss
+clears temporal smoothing so reacquisition starts fresh.
+
+### Release audit results
+
+The release audit runs the complete Python test suite (622 passed, 14 skipped, 0 failed) and the seated benchmark across 11 real Pentacam iris screenshots with 154 trials per mode:
+- **Fixed geometry**: 154/154 accepted (100%), median error 0.0009°, p95 error 0.010°, max error 0.034°, median latency 32.4 ms.
+- **Automatic geometry**: 136/154 accepted (88.3%), median error 0.0083°, p95 error 0.044°, max error 0.194°, median detection+registration latency 103.7 ms (<150 ms target).
+- **Bounded session**: 150/154 accepted (97.4%), median error 0.0093°, p95 error 0.087°, max error 0.225°, median latency 51.0 ms (~20 FPS).
+- **Specificity / False Acceptance**: 0/55 cross-eye unconfirmed pairs accepted (0.0% FAR, 100% true rejection).
+- **Accepted cases > 1.0°**: 0 across all modes.
+

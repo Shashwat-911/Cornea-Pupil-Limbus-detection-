@@ -31,6 +31,12 @@ from pupil_tracking.iris.types import IrisROI
 from pupil_tracking.preprocessing.reflection_removal import ReflectionRemover
 
 
+# Minimum horizontal run length (px) for an edge to count as an eyelid line.
+# A real eyelid boundary crosses the iris as a long horizontal streak; iris
+# furrows/vessels produce short single-pixel edge spikes that are not eyelid.
+_EYELID_RUN_LEN = 15
+
+
 class IrisMasking:
     """Build a usable-pixels mask for the iris annulus.
 
@@ -254,16 +260,25 @@ class IrisMasking:
     def _eyelid_mask(self, gray: np.ndarray, annulus: np.ndarray) -> np.ndarray:
         """Detect eyelid/eyelash occluding pixels inside the annulus.
 
-        Eyelids sweep across the top/bottom of the iris as horizontally
-        oriented edges, so a strong horizontal Sobel gradient marks them.
+        An eyelid edge is a *long horizontal streak* crossing the iris (the
+        limb boundary) plus short vertical lash spikes dropping from it. We
+        take the full gradient magnitude (both sobel axes, so the horizontal
+        lid line is actually seen) and then keep only edges that survive a
+        horizontal run-length opening, i.e. are part of a coherent line rather
+        than single-pixel texture spikes from iris furrows / crypts / vessels.
         The mask is restricted to the annulus and dilated to cover the eyelid
         margin.  This is a heuristic; it cannot distinguish a lower eyelid
         from an upper one but is adequate for masking.
         """
-        sobel_x = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
-        mag = np.abs(sobel_x)
+        sx = cv2.Sobel(gray, cv2.CV_32F, 1, 0, ksize=3)
+        sy = cv2.Sobel(gray, cv2.CV_32F, 0, 1, ksize=3)
+        mag = np.abs(sx) + np.abs(sy)
         edge = mag >= self.eyelid_edge_threshold
         edge = edge & annulus
+        k = cv2.getStructuringElement(cv2.MORPH_RECT, (_EYELID_RUN_LEN, 1))
+        edge = cv2.morphologyEx(
+            edge.astype(np.uint8), cv2.MORPH_OPEN, k
+        ).astype(bool)
         if self.eyelid_dilate_px > 0:
             k = cv2.getStructuringElement(
                 cv2.MORPH_ELLIPSE,

@@ -256,7 +256,7 @@ class PolarUnwrapper:
 
         # For each query angle, find the intersection of the ray from
         # query_center with the ellipse.  Use the simplified formula
-        # when centres coincide; otherwise offset the parametric form.
+        # when centres coincide; otherwise solve the quadratic intersection.
         if abs(dx) < 1e-6 and abs(dy) < 1e-6:
             # Coincident centres — simple formula
             cos_a = np.cos(angles - theta)
@@ -266,16 +266,18 @@ class PolarUnwrapper:
             denom = np.maximum(denom, 1e-8)
             radii = (a * b) / denom
         else:
-            # Non-coincident: approximate by shifting the angle-dependent
-            # radius by the centre offset projected onto each ray direction
-            cos_a = np.cos(angles - theta)
-            sin_a = np.sin(angles - theta)
-            denom = np.sqrt((b * cos_a) ** 2 + (a * sin_a) ** 2)
-            denom = np.maximum(denom, 1e-8)
-            base_radii = (a * b) / denom
-
-            # Project offset onto each ray
-            offset_proj = dx * np.cos(angles) + dy * np.sin(angles)
-            radii = np.maximum(base_radii + offset_proj, 1.0)
+            # Exact ray/ellipse intersection in the ellipse's local frame.
+            # Projecting the centre offset onto the ray distorts the annulus
+            # when the pupil is decentered, creating false angular structure.
+            ox = -dx * cos_t - dy * sin_t
+            oy = dx * sin_t - dy * cos_t
+            ux, uy = np.cos(angles - theta), np.sin(angles - theta)
+            qa = (ux / a) ** 2 + (uy / b) ** 2
+            qb = 2 * (ox * ux / a**2 + oy * uy / b**2)
+            qc = (ox / a) ** 2 + (oy / b) ** 2 - 1
+            discriminant = qb**2 - 4 * qa * qc
+            far = (-qb + np.sqrt(np.maximum(discriminant, 0))) / (2 * qa)
+            # No forward intersection means the ray starts directly in iris.
+            radii = np.where((discriminant >= 0) & (far > 0), far, 0.0)
 
         return radii

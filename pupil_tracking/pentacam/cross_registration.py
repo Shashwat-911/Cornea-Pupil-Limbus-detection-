@@ -24,7 +24,8 @@ from pupil_tracking.pentacam.cross_system import (
     TransformationModel,
 )
 from pupil_tracking.pentacam.detector import PentacamIrisDetector
-from pupil_tracking.pentacam.sitting import masked_angular_match, registration_mask, valid_geometry
+from pupil_tracking.pentacam.matcher import AngularMatcher, DEFAULT_MATCHER, checked_match
+from pupil_tracking.pentacam.sitting import registration_mask, valid_geometry
 from pupil_tracking.pentacam.types import PentacamDetectionResult
 from pupil_tracking.registration.polar import PolarImage, PolarUnwrapper
 from pupil_tracking.utils.types import EyeDetectionResult
@@ -40,12 +41,14 @@ class CrossModalityRegistrationEngine:
         num_angles: int = 360,
         num_radial: int = 64,
         max_rotation_search_deg: float = 30.0,
+        *, matcher: Optional[AngularMatcher] = None,
     ) -> None:
         if num_angles < 180 or num_radial < 8 or not 0 < max_rotation_search_deg < 180:
             raise ValueError("Require >=180 angular samples, >=8 radial samples, and 0<search<180 degrees")
         self.num_angles = num_angles
         self.num_radial = num_radial
         self.max_rotation_search_deg = max_rotation_search_deg
+        self.matcher = DEFAULT_MATCHER if matcher is None else matcher
 
         self.unwrapper = PolarUnwrapper(num_angles=num_angles, num_radial=num_radial, interpolation=cv2.INTER_LINEAR)
         self.pentacam_detector = PentacamIrisDetector()
@@ -93,10 +96,16 @@ class CrossModalityRegistrationEngine:
         t0 = time.perf_counter()
         laterality = laterality.upper()
         self.last_angular_match = None
+        # Keep smoothing only across consecutive accepted dynamic frames.
+        previous_smooth = self._last_smooth_theta
+        self._last_smooth_theta = None
         if laterality not in ("OD", "OS") or mode not in ("static", "dynamic"):
             raise ValueError("laterality must be OD/OS and mode static/dynamic")
 
         # 1. Validate inputs
+        for image in (pentacam_image, elita_image):
+            if image is not None and not isinstance(image, np.ndarray):
+                raise ValueError("Expected numpy uint8 grayscale or BGR images")
         if pentacam_image is None or elita_image is None or pentacam_image.size == 0 or elita_image.size == 0:
             return CrossSystemRegistrationResult(
                 valid=False,
@@ -155,6 +164,7 @@ class CrossModalityRegistrationEngine:
                      self.unwrapper.num_radial, self.unwrapper.inner_margin,
                      self.unwrapper.outer_margin, self.unwrapper.interpolation)
         if self._polar_cache_key != polar_key:
+            previous_smooth = None
             self._polar_cache = self._unwrap_pentacam(pentacam_image, pentacam_result)
             self._polar_cache_key = polar_key
             self._last_smooth_theta = None
@@ -188,6 +198,7 @@ class CrossModalityRegistrationEngine:
 
         # Dynamic mode temporal filtering
         if mode == "dynamic" and poc_conf > 0:
+            self._last_smooth_theta = previous_smooth
             fused_theta = self._apply_temporal_smoothing(fused_theta, fused_conf)
 
         # 8. Calculate model-based toric metrics; these are not clinical outcomes.
@@ -288,7 +299,7 @@ class CrossModalityRegistrationEngine:
         mask_curr: Optional[np.ndarray],
     ) -> Tuple[float, float, float]:
         """Compatibility tuple for the masked angular matcher; PSR is unused."""
-        match = masked_angular_match(enh_ref, enh_curr, mask_ref, mask_curr,
+        match = checked_match(self.matcher, enh_ref, enh_curr, mask_ref, mask_curr,
                                      self.max_rotation_search_deg,
                                      reference_cache=self._angular_reference_cache)
         self.last_angular_match = match

@@ -286,6 +286,9 @@ class PupilTrackingGUI:
             value = stored.get(name)
             return default if value is None else value.strip().lower() in ("1", "true", "yes", "on")
 
+        self._enable_centration_var = tk.BooleanVar(
+            value=stored_bool("centration_enabled", True)
+        )
         self._enable_registration_var = tk.BooleanVar(
             value=stored_bool("cyclotorsion_enabled", getattr(reg_cfg, "enabled", True) if reg_cfg else True)
         )
@@ -304,6 +307,7 @@ class PupilTrackingGUI:
             else "Mode: Pure Centration Only (Registration OFF)"
         )
         self._reg_settings_status = tk.StringVar(value=_init_status)
+        self._cyclotorsion_review_popup = None
 
 
     # ================================================================
@@ -509,6 +513,7 @@ class PupilTrackingGUI:
             self._storage_settings_path.parent.mkdir(parents=True, exist_ok=True)
             settings = {
                 "data_storage_root": str(root),
+                "centration_enabled": str(int(self._enable_centration_var.get())) if hasattr(self, "_enable_centration_var") else "1",
                 "cyclotorsion_enabled": str(int(self._enable_registration_var.get())) if hasattr(self, "_enable_registration_var") else "1",
                 "iris_features_enabled": str(int(self._enable_iris_features_var.get())) if hasattr(self, "_enable_iris_features_var") else "1",
                 "ink_marker_enabled": str(int(self._enable_ink_tracker_var.get())) if hasattr(self, "_enable_ink_tracker_var") else "1",
@@ -1836,7 +1841,19 @@ class PupilTrackingGUI:
             justify=tk.LEFT,
         ).pack(anchor=tk.W, pady=(0, 6))
 
-        # Master Checkbutton: Centration Only vs Full Registration
+        # Independent Feature Controls (PDF Specification)
+        ttk.Checkbutton(
+            reg_lf,
+            text="Enable Centration (Pupil, Limbus & Corneal Center)",
+            variable=self._enable_centration_var,
+            command=self._on_centration_toggle,
+        ).pack(anchor=tk.W, pady=2)
+        ttk.Label(
+            reg_lf,
+            text="   ↳ When OFF: Centration calculation and overlays are bypassed.",
+            style="Tiny.TLabel",
+        ).pack(anchor=tk.W, pady=(0, 4))
+
         ttk.Checkbutton(
             reg_lf,
             text="Enable Iris Registration & Cyclotorsion (Master Switch)",
@@ -2389,7 +2406,13 @@ class PupilTrackingGUI:
         self._image_size_var = add_row(proc_frame, "Image Size:")
         self._pipeline_var = add_row(proc_frame, "Pipeline:")
 
-        # ══════════════════════════════════════════════════════════
+        ttk.Button(
+            cards_outer,
+            text="🔬 Open Cyclotorsion Doctor Review Popup",
+            command=self._open_cyclotorsion_review_popup,
+        ).grid(row=5, column=0, columnspan=2, sticky="ew", padx=3, pady=6)
+
+        # ==========================================================
         # GRAYSCALE GUI 9 of 12 — Grayscale info in measurements
         # ══════════════════════════════════════════════════════════
         self._gray_mode_var_display = add_row(proc_frame, "Grayscale:")
@@ -4237,20 +4260,19 @@ class PupilTrackingGUI:
                         )
                         self.root.after(0, self._on_video_complete)
                         break
-                    pending_end = False
-                    if (
-                        self._opt_processor is not None
-                        and self._opt_processor.should_shed_input_frames()
-                        and frame_queue.qsize() > 3
-                    ):
+                    # Drain queued backlog to keep display and processing latency minimal (< 100ms)
+                    while frame_queue.qsize() > 1:
                         try:
-                            queued_item = frame_queue.get_nowait()
+                            fresher_item = frame_queue.get_nowait()
+                            if fresher_item is None:
+                                item = None
+                                break
+                            item = fresher_item
                         except _queue.Empty:
-                            queued_item = None
-                        if queued_item is None:
-                            pending_end = True
-                        else:
-                            item = queued_item
+                            break
+                    if item is None:
+                        self._video_running = False
+                        break
                     raw_frame_idx, frame = item
                     if self._opt_processor is not None:
                         self._opt_processor.note_source_frame(raw_frame_idx)
@@ -5052,10 +5074,9 @@ class PupilTrackingGUI:
                 math.sqrt(max(0.0, 1.0 - (semi_b / semi_a) ** 2)) if semi_a > 0 else 0.0
             )
             circ = (semi_b / semi_a) if semi_a > 0 else 1.0
-            return SimpleNamespace(
+            return EllipseParams(
                 center_x=center[0],
                 center_y=center[1],
-                radius=mean_radius,
                 semi_major=semi_a,
                 semi_minor=semi_b,
                 angle_deg=angle,
@@ -5066,7 +5087,6 @@ class PupilTrackingGUI:
                 num_contour_points=0,
                 uncertainty_center_x=1.0,
                 uncertainty_center_y=1.0,
-                fit_type=fit_type,
             )
 
         p_ell = _make_ellipse(
@@ -5871,22 +5891,37 @@ class PupilTrackingGUI:
                     cv2.LINE_AA,
                 )
 
-        # ── Iris ROI & Iris Feature Detection Overlay ──
-        if (
-            (self._show_iris_roi.get() or self._show_iris_features.get())
-            and getattr(result, "has_both", False)
+    def _get_or_detect_iris(self, result: Any):
+        if not (
+            getattr(result, "has_both", False)
             and getattr(result.pupil, "ellipse", None) is not None
             and getattr(result.limbus, "ellipse", None) is not None
             and self._current_image is not None
         ):
-            try:
-                if not hasattr(self, "_iris_detector_instance") or self._iris_detector_instance is None:
-                    from pupil_tracking.iris.detect import IrisFeatureDetector
-                    self._iris_detector_instance = IrisFeatureDetector()
+            return None
+        frame_key = (id(result), getattr(getattr(result, "metadata", None), "frame_number", None))
+        if getattr(self, "_last_iris_frame_key", None) == frame_key and getattr(self, "_last_iris_res", None) is not None:
+            return self._last_iris_res
+        if not hasattr(self, "_iris_detector_instance") or self._iris_detector_instance is None:
+            from pupil_tracking.iris.detect import IrisFeatureDetector
+            self._iris_detector_instance = IrisFeatureDetector()
+        try:
+            res = self._iris_detector_instance.detect(
+                self._current_image, pupil=result.pupil.ellipse, limbus=result.limbus.ellipse
+            )
+            self._last_iris_res = res
+            self._last_iris_frame_key = frame_key
+            return res
+        except Exception:
+            return None
 
-                iris_res = self._iris_detector_instance.detect(
-                    self._current_image, pupil=result.pupil.ellipse, limbus=result.limbus.ellipse
-                )
+        # ── Iris ROI & Iris Feature Detection Overlay ──
+        if (
+            (self._show_iris_roi.get() or self._show_iris_features.get())
+            and getattr(result, "has_both", False)
+        ):
+            iris_res = self._get_or_detect_iris(result)
+            if iris_res is not None:
                 roi = iris_res.feature_set.roi
                 if self._show_iris_roi.get() and roi.valid:
                     rcx = int(round(roi.center_x * scale))
@@ -5909,6 +5944,8 @@ class PupilTrackingGUI:
 
                 if self._show_iris_features.get():
                     for feat in iris_res.feature_set.features:
+                        if not feat.valid:
+                            continue
                         fx = int(round(feat.x * scale))
                         fy = int(round(feat.y * scale))
                         cv2.circle(out, (fx, fy), max(2, int(2.5 * scale)), (0, 255, 255), -1)
@@ -5917,8 +5954,6 @@ class PupilTrackingGUI:
                         x2 = int(round(fx + 5.0 * scale * np.cos(ang)))
                         y2 = int(round(fy + 5.0 * scale * np.sin(ang)))
                         cv2.line(out, (fx, fy), (x2, y2), (0, 255, 255), 1, cv2.LINE_AA)
-            except Exception:
-                pass
 
         # ── Limbal Purple Ink Marker (Gentian Violet) Overlay ──
         if (
@@ -6284,6 +6319,39 @@ class PupilTrackingGUI:
     # Measurements
     # ================================================================
 
+
+    def _on_centration_toggle(self) -> None:
+        """Callback when Centration independent toggle is modified."""
+        self._save_storage_settings()
+        self._refresh_display()
+
+    def _open_cyclotorsion_review_popup(self) -> None:
+        """Open the interactive Cyclotorsion Review & Validation Window (Phase 2 and 3)."""
+        from pupil_tracking.interface.review_dialog import CyclotorsionReviewDialog
+        if (
+            hasattr(self, "_cyclotorsion_review_popup")
+            and self._cyclotorsion_review_popup is not None
+            and self._cyclotorsion_review_popup.winfo_exists()
+        ):
+            self._cyclotorsion_review_popup.lift()
+            self._cyclotorsion_review_popup.focus_force()
+            return
+
+        storage = self._storage_root_var.get().strip() or "review_output"
+        px_id = self._patient_id_var.get().strip() or "AUTO"
+        px_name = self._patient_name_var.get().strip() or ""
+        from pathlib import Path
+        self._cyclotorsion_review_popup = CyclotorsionReviewDialog(
+            parent=self.root,
+            patient_id=px_id,
+            patient_name=px_name,
+            laterality="OD",
+            storage_root=Path(storage),
+            gui_ref=self,
+        )
+        if self._current_image is not None:
+            self._cyclotorsion_review_popup.run_registration(self._current_image, mode="static")
+
     def _update_measurements(self, result: Any) -> None:
         try:
             cal = result.calibration
@@ -6478,24 +6546,24 @@ class PupilTrackingGUI:
                 for var in self._wtw_vars.values():
                     var.set("---")
 
-            # ── Iris ROI & Feature Detection Card ──
+            # ── Dynamic Cyclotorsion Live Review Popup Update ──
             if (
-                hasattr(self, "_ir_vars")
-                and getattr(result, "has_both", False)
-                and getattr(result.pupil, "ellipse", None) is not None
-                and getattr(result.limbus, "ellipse", None) is not None
+                hasattr(self, "_cyclotorsion_review_popup")
+                and self._cyclotorsion_review_popup is not None
+                and self._cyclotorsion_review_popup.winfo_exists()
                 and self._current_image is not None
             ):
                 try:
-                    if not hasattr(self, "_iris_detector_instance") or self._iris_detector_instance is None:
-                        from pupil_tracking.iris.detect import IrisFeatureDetector
-                        self._iris_detector_instance = IrisFeatureDetector()
+                    self._cyclotorsion_review_popup.update_live_data(self._current_image, result)
+                except Exception as _rev_err:
+                    self.logger.debug("Review popup live update skipped: %s", _rev_err)
 
-                    ir_res = self._iris_detector_instance.detect(
-                        self._current_image, pupil=result.pupil.ellipse, limbus=result.limbus.ellipse
-                    )
-                    roi = ir_res.feature_set.roi
-                    if roi.valid:
+            # ── Iris ROI & Feature Detection Card ──
+            if hasattr(self, "_ir_vars") and getattr(result, "has_both", False):
+                try:
+                    ir_res = self._get_or_detect_iris(result)
+                    if ir_res is not None and ir_res.feature_set.roi.valid:
+                        roi = ir_res.feature_set.roi
                         self._ir_vars["status"].set("Active (Annulus Built)")
                         in_r = roi.pupil_radius_px * (1.0 + roi.inner_inset_frac)
                         out_r = roi.limbus_radius_px * (1.0 - roi.outer_inset_frac)
@@ -6505,7 +6573,7 @@ class PupilTrackingGUI:
                         self._ir_vars["coverage"].set(f"{getattr(ir_res.feature_set, 'region_coverage', 0.0):.1%}")
                         self._ir_vars["quality"].set("SURGICAL GRADE" if n_feats >= 5 else "CLINICAL")
                     else:
-                        self._ir_vars["status"].set("Invalid ROI")
+                        self._ir_vars["status"].set("Invalid ROI" if ir_res is not None else "---")
                         self._ir_vars["annulus"].set("---")
                         self._ir_vars["features"].set("0")
                         self._ir_vars["coverage"].set("0%")

@@ -16,11 +16,11 @@ from pupil_tracking.utils.types import EyeDetectionResult, PupilDetection, Limbu
 
 
 class SittingRegistrationSession:
-    def __init__(self, max_size=640, num_angles=720):
+    def __init__(self, max_size=640, num_angles=720, *, matcher=None):
         if max_size < 256 or num_angles < 180:
             raise ValueError("max_size >= 256 and num_angles >= 180 required")
         self.max_size = max_size
-        self.engine = CrossModalityRegistrationEngine(num_angles=num_angles)
+        self.engine = CrossModalityRegistrationEngine(num_angles=num_angles, matcher=matcher)
         self.reference = None
         self.reference_detection = None
         self.eye_id = None
@@ -65,6 +65,7 @@ class SittingRegistrationSession:
             return CrossSystemRegistrationResult(failure=RegistrationFailureKind.MISSING_METADATA,
                                                    failure_reason="Set a valid seated reference first")
         if str(eye_id) != self.eye_id or laterality != self.laterality:
+            self.engine._last_smooth_theta = None
             return CrossSystemRegistrationResult(failure=RegistrationFailureKind.COORDINATE_MISMATCH,
                                                    failure_reason="Reference and current eye identity/laterality differ")
         current, (x, y, sx, sy) = self._prepare(image, crop=detection is None)
@@ -72,6 +73,7 @@ class SittingRegistrationSession:
             detected = self.engine.pentacam_detector.detect(current, extract_features=False,
                                                            refine_boundary=False)
             if not detected.valid:
+                self.engine._last_smooth_theta = None
                 return CrossSystemRegistrationResult(
                     failure=RegistrationFailureKind.NO_ELITA, failure_reason=detected.failure_reason,
                     processing_time_ms=(time.perf_counter() - start) * 1000)

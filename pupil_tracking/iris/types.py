@@ -65,6 +65,8 @@ class IrisROI:
 
     center_x: float = 0.0
     center_y: float = 0.0
+    pupil_center_x: float = 0.0
+    pupil_center_y: float = 0.0
     pupil_semi_major: float = 0.0
     pupil_semi_minor: float = 0.0
     pupil_angle_deg: float = 0.0

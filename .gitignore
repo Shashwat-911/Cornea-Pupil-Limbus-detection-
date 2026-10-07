@@ -52,6 +52,7 @@ project_tree.txt
 PROJECT_COMPLETE_ANALYSIS.md
 manual_ring_priors.json
 diagnostic_output/
+review_output/
 output/
 
 # Training data (large, not needed for repo)
