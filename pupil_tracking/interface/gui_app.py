@@ -5668,6 +5668,31 @@ class PupilTrackingGUI:
         right_x, right_y = int(round(l_right_pt[0])), int(round(l_right_pt[1]))
         cv2.putText(out, "180", (right_x + int(5 * scale), right_y + int(4 * scale)), font, font_sz, lbl_color, 1, cv2.LINE_AA)
 
+    def _get_or_detect_iris(self, result: Any, image: Optional[np.ndarray] = None) -> Any:
+        target_img = image if image is not None else getattr(self, "_current_image", None)
+        if not (
+            getattr(result, "has_both", False)
+            and getattr(result.pupil, "ellipse", None) is not None
+            and getattr(result.limbus, "ellipse", None) is not None
+            and target_img is not None
+        ):
+            return None
+        frame_key = (id(result), getattr(getattr(result, "metadata", None), "frame_number", None))
+        if getattr(self, "_last_iris_frame_key", None) == frame_key and getattr(self, "_last_iris_res", None) is not None:
+            return self._last_iris_res
+        if not hasattr(self, "_iris_detector_instance") or self._iris_detector_instance is None:
+            from pupil_tracking.iris.detect import IrisFeatureDetector
+            self._iris_detector_instance = IrisFeatureDetector()
+        try:
+            res = self._iris_detector_instance.detect(
+                target_img, pupil=result.pupil.ellipse, limbus=result.limbus.ellipse
+            )
+            self._last_iris_res = res
+            self._last_iris_frame_key = frame_key
+            return res
+        except Exception:
+            return None
+
 
     def _draw_overlay_scaled(self, out: np.ndarray, result: Any, scale: float) -> None:
         """Draw overlays on an already-resized image with scaled coords."""
@@ -5893,30 +5918,6 @@ class PupilTrackingGUI:
                     cv2.LINE_AA,
                 )
 
-    def _get_or_detect_iris(self, result: Any):
-        if not (
-            getattr(result, "has_both", False)
-            and getattr(result.pupil, "ellipse", None) is not None
-            and getattr(result.limbus, "ellipse", None) is not None
-            and self._current_image is not None
-        ):
-            return None
-        frame_key = (id(result), getattr(getattr(result, "metadata", None), "frame_number", None))
-        if getattr(self, "_last_iris_frame_key", None) == frame_key and getattr(self, "_last_iris_res", None) is not None:
-            return self._last_iris_res
-        if not hasattr(self, "_iris_detector_instance") or self._iris_detector_instance is None:
-            from pupil_tracking.iris.detect import IrisFeatureDetector
-            self._iris_detector_instance = IrisFeatureDetector()
-        try:
-            res = self._iris_detector_instance.detect(
-                self._current_image, pupil=result.pupil.ellipse, limbus=result.limbus.ellipse
-            )
-            self._last_iris_res = res
-            self._last_iris_frame_key = frame_key
-            return res
-        except Exception:
-            return None
-
         # ── Iris ROI & Iris Feature Detection Overlay ──
         if (
             (self._show_iris_roi.get() or self._show_iris_features.get())
@@ -5999,9 +6000,6 @@ class PupilTrackingGUI:
 
         self._draw_cross_section(out, result, scale)
 
-        # (Removed) On-image quality badge text (e.g. "SURGICAL (0.94)") that
-        # was drawn top-left on the video.  The quality/confidence is still
-        # shown in the ribbon badge and the measurements panel.
         font_scale_t = max(0.3, 0.5 * scale)
         cv2.putText(
             out,
@@ -6012,17 +6010,6 @@ class PupilTrackingGUI:
             (180, 180, 180),
             1,
         )
-        # (Removed) On-image "OVERLOAD PROTECTION" overlay that blinked
-        # top-left while adaptive overload protection was active.  Overload
-        # protection itself still runs; only the on-video text was removed.
-
-        # ══════════════════════════════════════════════════════════
-        # GRAYSCALE GUI 12 of 12 — Grayscale mode badge on image
-        # ══════════════════════════════════════════════════════════
-        # (Removed) Grayscale mode badge text overlay (top-right).
-        # Grayscale processing (OFF/AUTO/FORCE) and overlays remain active; 
-        # only the on-image text label was removed to reduce clutter.
-        # ══════════════════════════════════════════════════════════
 
         font_scale_a = max(0.25, 0.4 * scale)
         for i, alert in enumerate(result.alerts[:3]):
