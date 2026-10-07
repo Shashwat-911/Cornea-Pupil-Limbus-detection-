@@ -12,7 +12,7 @@ which changes with dilation), making them excellent landmarks.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -169,18 +169,34 @@ class VesselTrackerStream(BaseStream):
         r_outer = le.radius * 1.25   # Into sclera
 
         h, w = gray.shape
-        Y, X = np.ogrid[:h, :w]
-        dist = np.sqrt((X - center[0])**2 + (Y - center[1])**2)
+        cx, cy = int(round(center[0])), int(round(center[1]))
+        margin = int(np.ceil(r_outer)) + 5
+
+        x0 = max(0, cx - margin)
+        x1 = min(w, cx + margin + 1)
+        y0 = max(0, cy - margin)
+        y1 = min(h, cy + margin + 1)
+
+        if x1 <= x0 or y1 <= y0:
+            return None, center
+
+        crop_gray = gray[y0:y1, x0:x1]
+        ch, cw = crop_gray.shape
+        local_cx = center[0] - x0
+        local_cy = center[1] - y0
+
+        Y, X = np.ogrid[:ch, :cw]
+        dist = np.sqrt((X - local_cx)**2 + (Y - local_cy)**2)
         ring_mask = ((dist >= r_inner) & (dist <= r_outer)).astype(np.uint8) * 255
 
         if np.sum(ring_mask > 0) < 100:
             return None, center
 
-        # Enhance vessels using morphological top-hat
-        masked = cv2.bitwise_and(gray, gray, mask=ring_mask)
+        # Enhance vessels using morphological top-hat on ROI crop
+        masked = cv2.bitwise_and(crop_gray, crop_gray, mask=ring_mask)
 
         # Multi-scale top-hat for vessel enhancement
-        vessel_response = np.zeros_like(gray, dtype=np.float32)
+        vessel_response = np.zeros_like(crop_gray, dtype=np.float32)
         for ksize in [3, 5, 7]:
             kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (ksize, ksize))
             tophat = cv2.morphologyEx(masked, cv2.MORPH_BLACKHAT, kernel)
@@ -198,10 +214,14 @@ class VesselTrackerStream(BaseStream):
         # Apply ring mask
         vessel_binary = cv2.bitwise_and(vessel_binary, ring_mask)
 
-        # Thin to skeleton
-        vessel_binary = self._skeletonise(vessel_binary)
+        # Thin to skeleton on crop
+        skeleton_crop = self._skeletonise(vessel_binary)
 
-        return vessel_binary, center
+        # Re-embed onto full image coordinates for consistent global angle calculations
+        full_skeleton = np.zeros((h, w), dtype=np.uint8)
+        full_skeleton[y0:y1, x0:x1] = skeleton_crop
+
+        return full_skeleton, center
 
     def _skeletonise(self, binary: np.ndarray) -> np.ndarray:
         """Morphological skeletonisation."""
@@ -259,34 +279,41 @@ class VesselTrackerStream(BaseStream):
         points: List[Tuple[float, float]],
         min_dist: float = 10.0,
     ) -> List[Tuple[float, float]]:
-        """Merge nearby points via greedy non-maximum suppression."""
+        """Merge nearby points via fast spatial hash clustering O(N)."""
         if not points:
             return []
 
-        remaining = list(points)
-        merged = []
+        cell_size = float(min_dist)
+        grid: Dict[Tuple[int, int], int] = {}
+        clusters: List[List[float]] = []  # [sum_x, sum_y, count]
+        min_dist_sq = min_dist * min_dist
 
-        while remaining:
-            p = remaining.pop(0)
-            cluster = [p]
+        for x, y in points:
+            gx, gy = int(x // cell_size), int(y // cell_size)
+            matched = False
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    neigh = (gx + dx, gy + dy)
+                    if neigh in grid:
+                        cid = grid[neigh]
+                        c = clusters[cid]
+                        cx = c[0] / c[2]
+                        cy = c[1] / c[2]
+                        if (x - cx) ** 2 + (y - cy) ** 2 < min_dist_sq:
+                            c[0] += x
+                            c[1] += y
+                            c[2] += 1.0
+                            matched = True
+                            break
+                if matched:
+                    break
 
-            i = 0
-            while i < len(remaining):
-                dist = np.sqrt(
-                    (remaining[i][0] - p[0])**2 +
-                    (remaining[i][1] - p[1])**2
-                )
-                if dist < min_dist:
-                    cluster.append(remaining.pop(i))
-                else:
-                    i += 1
+            if not matched:
+                cid = len(clusters)
+                clusters.append([float(x), float(y), 1.0])
+                grid[(gx, gy)] = cid
 
-            # Average the cluster
-            cx = np.mean([c[0] for c in cluster])
-            cy = np.mean([c[1] for c in cluster])
-            merged.append((float(cx), float(cy)))
-
-        return merged
+        return [(float(c[0] / c[2]), float(c[1] / c[2])) for c in clusters]
 
     def _match_bifurcations(
         self,
