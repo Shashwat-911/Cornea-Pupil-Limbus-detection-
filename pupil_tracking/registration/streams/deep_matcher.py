@@ -69,7 +69,12 @@ class DeepMatcherStream(BaseStream):
     ) -> StreamResult:
         """Match features between iris crops and compute rotation."""
 
-        if not detection_ref.has_both or not detection_curr.has_both:
+        if (
+            not detection_ref.has_both
+            or not detection_curr.has_both
+            or detection_ref.limbus.ellipse is None
+            or detection_curr.limbus.ellipse is None
+        ):
             return self._make_result(
                 metadata={"error": "incomplete_detection"}
             )

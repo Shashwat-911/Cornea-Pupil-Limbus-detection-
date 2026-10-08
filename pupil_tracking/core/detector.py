@@ -590,14 +590,16 @@ class UnifiedDetector:
                 pupil_hint = None
                 if result.pupil.detected and result.pupil.ellipse is not None:
                     pupil_hint = result.pupil.ellipse
-                classical_limbus = self._classical_limbus(
-                    image,
-                    pupil_hint=pupil_hint,
-                    ring_result=ring_result,
-                )
-                if classical_limbus.detected:
-                    classical_limbus.confidence *= dc.classical_confidence_penalty
-                    result.limbus = classical_limbus
+                # Only run classical limbus if anchored by pupil or suction ring
+                if pupil_hint is not None or is_docked:
+                    classical_limbus = self._classical_limbus(
+                        image,
+                        pupil_hint=pupil_hint,
+                        ring_result=ring_result,
+                    )
+                    if classical_limbus.detected:
+                        classical_limbus.confidence *= dc.classical_confidence_penalty
+                        result.limbus = classical_limbus
 
         # -- Step 4b: Pre-docked limbus shrink correction ------------
         if (
@@ -609,6 +611,14 @@ class UnifiedDetector:
             result.limbus.ellipse.set_radius(
                 result.limbus.ellipse.radius * shrink_factor
             )
+
+        # Sync detection flags with presence of fitted ellipses
+        if result.pupil.ellipse is None:
+            result.pupil.detected = False
+            result.pupil.confidence = 0.0
+        if result.limbus.ellipse is None:
+            result.limbus.detected = False
+            result.limbus.confidence = 0.0
 
         # -- Step 5: Cross-validation and rejection --------------------
         if result.has_both:
@@ -1108,6 +1118,14 @@ class UnifiedDetector:
                     classical_limbus.confidence *= dc.classical_confidence_penalty
                     result.limbus = classical_limbus
 
+        # Sync detection flags with presence of fitted ellipses
+        if result.pupil.ellipse is None:
+            result.pupil.detected = False
+            result.pupil.confidence = 0.0
+        if result.limbus.ellipse is None:
+            result.limbus.detected = False
+            result.limbus.confidence = 0.0
+
         # Cross-validation
         if result.has_both:
             result = self._cross_validate_and_reject(
@@ -1501,7 +1519,7 @@ class UnifiedDetector:
             ep = self._fit_result_to_ellipse_params(pupil_fit)
             new_conf = self._fit_result_confidence(pupil_fit)
 
-            if (not result.pupil.detected) or new_conf >= result.pupil.confidence:
+            if (not result.pupil.detected) or result.pupil.ellipse is None or new_conf >= result.pupil.confidence:
                 result.pupil.detected = True
                 result.pupil.ellipse = ep
                 result.pupil.confidence = new_conf
@@ -1517,6 +1535,7 @@ class UnifiedDetector:
 
             if (
                 not result.limbus.detected
+                or result.limbus.ellipse is None
                 or force_limbus_overwrite
                 or new_conf >= result.limbus.confidence
             ):
@@ -1763,10 +1782,10 @@ class UnifiedDetector:
             if offset_ratio > 1.0:
                 self.logger.warning(
                     "Pupil centre outside limbus (ratio=%.2f). "
-                    "Rejecting less confident.",
+                    "Rejecting invalid limbus or less confident.",
                     offset_ratio,
                 )
-                if result.pupil.confidence > result.limbus.confidence:
+                if result.pupil.confidence >= 0.30 or result.pupil.confidence > result.limbus.confidence:
                     result.limbus = LimbusDetection()
                     result.alerts.append("Limbus rejected: pupil centre outside limbus")
                 else:
@@ -2106,6 +2125,9 @@ class UnifiedDetector:
             RingStatus.PRESENT,
             RingStatus.PARTIAL,
         )
+        if not p_valid and not is_docked:
+            return detection
+
         if is_docked and ring_result.ring_radius is not None:
             max_radius = min(max_radius, int(ring_result.ring_radius * 0.90))
 

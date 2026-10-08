@@ -478,11 +478,11 @@ class EyeDetectionResult:
 
     @property
     def has_pupil(self) -> bool:
-        return self.pupil.detected
+        return self.pupil.detected and self.pupil.ellipse is not None
 
     @property
     def has_limbus(self) -> bool:
-        return self.limbus.detected
+        return self.limbus.detected and self.limbus.ellipse is not None
 
     @property
     def has_both(self) -> bool:
@@ -821,7 +821,7 @@ class StreamResult:
     def valid(self) -> bool:
         return (self.torsion_deg is not None
                 and math.isfinite(self.torsion_deg)
-                and self.confidence > 0.0)
+                and self.confidence >= 0.15)
 
     def to_dict(self) -> Dict[str, Any]:
         return {

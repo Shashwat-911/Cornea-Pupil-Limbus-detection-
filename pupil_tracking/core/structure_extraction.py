@@ -125,7 +125,7 @@ def apply_fit_to_result(
         ep = fit_result_to_ellipse_params(pupil_fit)
         new_conf = fit_result_confidence(pupil_fit)
 
-        if (not result.pupil.detected) or new_conf >= result.pupil.confidence:
+        if (not result.pupil.detected) or result.pupil.ellipse is None or new_conf >= result.pupil.confidence:
             result.pupil.detected = True
             result.pupil.ellipse = ep
             result.pupil.confidence = new_conf
@@ -141,6 +141,7 @@ def apply_fit_to_result(
 
         if (
             not result.limbus.detected
+            or result.limbus.ellipse is None
             or force_limbus_overwrite
             or new_conf >= result.limbus.confidence
         ):
@@ -232,6 +233,12 @@ def extract_structure(
         gray_image,
         pupil_hint=pupil_fit,
     )
+
+    # In pre-docked mode, require a valid pupil fit before accepting limbus fit
+    # During blinks / closed eyes, mask contains noise/eyelid contours but no pupil
+    if not is_docked and (pupil_fit is None or not pupil_fit.valid):
+        logger.debug("Pre-docking limbus fit rejected: pupil not detected (blink/occlusion)")
+        limbus_fit = None
 
     # Validate pre-docking limbus concentricity and radius ratio
     if (

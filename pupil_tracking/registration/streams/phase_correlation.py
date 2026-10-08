@@ -109,6 +109,18 @@ class PhaseCorrelationStream(BaseStream):
         # Confidence from PSR and valid fraction
         confidence = self._compute_confidence(psr, valid_frac, peak_val)
 
+        if psr < 3.5 or confidence < 0.15:
+            return self._make_result(
+                torsion_deg=None,
+                confidence=0.0,
+                metadata={
+                    "psr": float(psr),
+                    "peak_value": float(peak_val),
+                    "valid_fraction": float(valid_frac),
+                    "error": "low_confidence_noise_floor",
+                },
+            )
+
         return self._make_result(
             torsion_deg=shift_deg,
             confidence=confidence,

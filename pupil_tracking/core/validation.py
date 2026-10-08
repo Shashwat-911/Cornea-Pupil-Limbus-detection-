@@ -62,10 +62,10 @@ def cross_validate_and_reject(
         if offset_ratio > 1.0:
             logger.warning(
                 "Pupil centre outside limbus (ratio=%.2f). "
-                "Rejecting less confident.",
+                "Rejecting invalid limbus or less confident.",
                 offset_ratio,
             )
-            if result.pupil.confidence > result.limbus.confidence:
+            if result.pupil.confidence >= 0.30 or result.pupil.confidence > result.limbus.confidence:
                 result.limbus = LimbusDetection()
                 result.alerts.append("Limbus rejected: pupil centre outside limbus")
             else:
