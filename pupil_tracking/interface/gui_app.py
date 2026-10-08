@@ -1369,7 +1369,7 @@ class PupilTrackingGUI:
         self._show_ring_center = tk.BooleanVar(value=False)
         self._show_measurements = tk.BooleanVar(value=False)
         self._show_debug_overlay = tk.BooleanVar(value=False)
-        self._show_iris_roi = tk.BooleanVar(value=True)
+        self._show_iris_roi = tk.BooleanVar(value=False)
         self._show_iris_features = tk.BooleanVar(value=True)
         view_menu.add_checkbutton(
             label="Show Overlay",
