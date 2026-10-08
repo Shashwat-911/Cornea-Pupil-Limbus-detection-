@@ -220,6 +220,8 @@ class PupilTrackingGUI:
         self._add_px_dialog_open = False
         self._patient_summary_var = tk.StringVar(value="No patient selected")
         self._recording_location_var = tk.StringVar(value="Recording location: select a patient and eye")
+        self._measurements_text_cache: Dict[int, str] = {}
+        self._video_source_fps: float = 30.0
         self._load_storage_settings()
         # ══════════════════════════════════════════════════════════
 
@@ -942,13 +944,18 @@ class PupilTrackingGUI:
         composite = self._compose_capture_frame(display_image, self._current_result)
         h, w = composite.shape[:2]
 
-        target_fps = 30.0
+        effective_fps = 30.0
         if self._video_cap is not None:
             fps = self._video_cap.get(cv2.CAP_PROP_FPS)
             if fps > 0 and fps <= 120:
-                target_fps = fps
+                effective_fps = fps
+        elif getattr(self, "_video_source_fps", None):
+            effective_fps = self._video_source_fps
 
-        if not self._recorder.start(path, w, h, target_fps):
+        stride = max(1, self._stride_var.get())
+        rec_fps = max(1.0, effective_fps / stride)
+
+        if not self._recorder.start(path, w, h, rec_fps):
             messagebox.showerror(
                 "Recording Error",
                 f"Cannot start recording. Check codec support.\nPath: {path}",
@@ -963,7 +970,7 @@ class PupilTrackingGUI:
             raw_h, raw_w = self._current_image.shape[:2]
             p = Path(path)
             raw_path = str(p.with_name(f"{p.stem}_raw{p.suffix}"))
-            if self._raw_recorder.start(raw_path, raw_w, raw_h, target_fps):
+            if self._raw_recorder.start(raw_path, raw_w, raw_h, rec_fps):
                 self._raw_recording_path = raw_path
                 self.logger.info("Clean RAW stream recording started → %s", raw_path)
             else:
@@ -1099,21 +1106,40 @@ class PupilTrackingGUI:
 
     def _prepare_recording_frame(self, frame: np.ndarray, result: Any) -> np.ndarray:
         """Prepare a frame that mirrors the current on-screen display for recording."""
-        mode = self._grayscale_mode_var.get()
+        mode = self._safe_var_get(getattr(self, "_grayscale_mode_var", None), "off")
         if mode == "off":
             image = frame.copy()
         else:
             image = self._convert_display_frame(frame.copy())
 
-        if result is not None and self._show_overlay.get():
+        show_overlay = self._safe_bool_get(getattr(self, "_show_overlay", None), True)
+        if result is not None and show_overlay:
             self._draw_overlay_scaled(image, result, 1.0)
 
         self._draw_manual_roi_overlay(image, 1.0)
         self._draw_manual_ring_overlay(image, 1.0)
-        if self._show_debug_overlay.get():
+        show_debug = self._safe_bool_get(getattr(self, "_show_debug_overlay", None), False)
+        if show_debug:
             self._draw_debug_overlay(image, 1.0)
 
         return image
+
+    def _safe_bool_get(self, var: Any, default: bool = False) -> bool:
+        """Thread-safe getter for UI boolean variables; avoids cross-thread Tk calls."""
+        if var is None:
+            return default
+        try:
+            if threading.current_thread() is threading.main_thread():
+                return bool(var.get())
+        except Exception:
+            pass
+        cache = getattr(self, "_measurements_text_cache", None)
+        if cache is not None and id(var) in cache:
+            return cache[id(var)] in (True, "True", "1", 1)
+        try:
+            return bool(var.get())
+        except Exception:
+            return default
 
     @staticmethod
     def _hex_to_bgr(value: str) -> Tuple[int, int, int]:
@@ -1125,101 +1151,122 @@ class PupilTrackingGUI:
         b = int(value[4:6], 16)
         return (b, g, r)
 
+    def _safe_var_get(self, var: Any, default: str = "---") -> str:
+        """Thread-safe getter for UI variables; avoids cross-thread Tk calls."""
+        if var is None:
+            return default
+        try:
+            if threading.current_thread() is threading.main_thread():
+                v = var.get()
+                val_str = str(v) if v is not None else default
+                if hasattr(self, "_measurements_text_cache"):
+                    self._measurements_text_cache[id(var)] = val_str
+                return val_str
+        except Exception:
+            pass
+        cache = getattr(self, "_measurements_text_cache", None)
+        if cache is not None and id(var) in cache:
+            return cache[id(var)]
+        try:
+            return str(var.get())
+        except Exception:
+            return default
+
     def _measurement_capture_sections(self) -> List[Tuple[str, Tuple[int, int, int], List[Tuple[str, str]]]]:
         return [
             (
                 "PUPIL",
                 self._hex_to_bgr(self._colors.PUPIL),
                 [
-                    ("Center", self._pv["center"].get()),
-                    ("Diameter (px)", self._pv["diameter_px"].get()),
-                    ("Diameter (mm)", self._pv["diameter_mm"].get()),
-                    ("Semi-Major (px)", self._pv["semi_major"].get()),
-                    ("Semi-Major (mm)", self._pv["semi_major_mm"].get()),
-                    ("Semi-Minor (px)", self._pv["semi_minor"].get()),
-                    ("Semi-Minor (mm)", self._pv["semi_minor_mm"].get()),
-                    ("Angle", self._pv["angle"].get()),
-                    ("Fit Type", self._pv["fit_type"].get()),
-                    ("Confidence", self._pv["confidence"].get()),
-                    ("Quality", self._pv["quality"].get()),
+                    ("Center", self._safe_var_get(self._pv.get("center"))),
+                    ("Diameter (px)", self._safe_var_get(self._pv.get("diameter_px"))),
+                    ("Diameter (mm)", self._safe_var_get(self._pv.get("diameter_mm"))),
+                    ("Semi-Major (px)", self._safe_var_get(self._pv.get("semi_major"))),
+                    ("Semi-Major (mm)", self._safe_var_get(self._pv.get("semi_major_mm"))),
+                    ("Semi-Minor (px)", self._safe_var_get(self._pv.get("semi_minor"))),
+                    ("Semi-Minor (mm)", self._safe_var_get(self._pv.get("semi_minor_mm"))),
+                    ("Angle", self._safe_var_get(self._pv.get("angle"))),
+                    ("Fit Type", self._safe_var_get(self._pv.get("fit_type"))),
+                    ("Confidence", self._safe_var_get(self._pv.get("confidence"))),
+                    ("Quality", self._safe_var_get(self._pv.get("quality"))),
                 ],
             ),
             (
                 "LIMBUS",
                 self._hex_to_bgr(self._colors.LIMBUS),
                 [
-                    ("Center", self._lv["center"].get()),
-                    ("Diameter (px)", self._lv["diameter_px"].get()),
-                    ("Diameter (mm)", self._lv["diameter_mm"].get()),
-                    ("Semi-Major (px)", self._lv["semi_major"].get()),
-                    ("Semi-Major (mm)", self._lv["semi_major_mm"].get()),
-                    ("Semi-Minor (px)", self._lv["semi_minor"].get()),
-                    ("Semi-Minor (mm)", self._lv["semi_minor_mm"].get()),
-                    ("Angle", self._lv["angle"].get()),
-                    ("Fit Type", self._lv["fit_type"].get()),
-                    ("Confidence", self._lv["confidence"].get()),
-                    ("Quality", self._lv["quality"].get()),
+                    ("Center", self._safe_var_get(self._lv.get("center"))),
+                    ("Diameter (px)", self._safe_var_get(self._lv.get("diameter_px"))),
+                    ("Diameter (mm)", self._safe_var_get(self._lv.get("diameter_mm"))),
+                    ("Semi-Major (px)", self._safe_var_get(self._lv.get("semi_major"))),
+                    ("Semi-Major (mm)", self._safe_var_get(self._lv.get("semi_major_mm"))),
+                    ("Semi-Minor (px)", self._safe_var_get(self._lv.get("semi_minor"))),
+                    ("Semi-Minor (mm)", self._safe_var_get(self._lv.get("semi_minor_mm"))),
+                    ("Angle", self._safe_var_get(self._lv.get("angle"))),
+                    ("Fit Type", self._safe_var_get(self._lv.get("fit_type"))),
+                    ("Confidence", self._safe_var_get(self._lv.get("confidence"))),
+                    ("Quality", self._safe_var_get(self._lv.get("quality"))),
                 ],
             ),
             (
                 "CORNEAL OFFSET",
                 self._hex_to_bgr(self._colors.OFFSET),
                 [
-                    ("Corneal Centre", self._ov["corneal_center"].get()),
-                    ("Offset (px)", self._ov["offset_px"].get()),
-                    ("Offset (mm)", self._ov["offset_mm"].get()),
-                    ("Offset dX,dY px", self._ov["offset_vec_px"].get()),
-                    ("Offset dX,dY mm", self._ov["offset_vec_mm"].get()),
-                    ("Offset Angle", self._ov["offset_angle"].get()),
-                    ("Pupil/Limbus", self._ov["pupil_limbus_ratio"].get()),
+                    ("Corneal Centre", self._safe_var_get(self._ov.get("corneal_center"))),
+                    ("Offset (px)", self._safe_var_get(self._ov.get("offset_px"))),
+                    ("Offset (mm)", self._safe_var_get(self._ov.get("offset_mm"))),
+                    ("Offset dX,dY px", self._safe_var_get(self._ov.get("offset_vec_px"))),
+                    ("Offset dX,dY mm", self._safe_var_get(self._ov.get("offset_vec_mm"))),
+                    ("Offset Angle", self._safe_var_get(self._ov.get("offset_angle"))),
+                    ("Pupil/Limbus", self._safe_var_get(self._ov.get("pupil_limbus_ratio"))),
                 ],
             ),
             (
                 "CORNEAL DIMENSIONS (WTW)",
                 self._hex_to_bgr(self._colors.LIMBUS),
                 [
-                    ("Horizontal", self._wtw_vars["horizontal"].get()),
-                    ("Vertical", self._wtw_vars["vertical"].get()),
-                    ("Mean", self._wtw_vars["mean"].get()),
+                    ("Horizontal", self._safe_var_get(self._wtw_vars.get("horizontal"))),
+                    ("Vertical", self._safe_var_get(self._wtw_vars.get("vertical"))),
+                    ("Mean", self._safe_var_get(self._wtw_vars.get("mean"))),
                 ],
             ),
             (
                 "IRIS ROI & FEATURES",
                 self._hex_to_bgr(self._colors.OFFSET),
                 [
-                    ("ROI Status", self._ir_vars["status"].get() if hasattr(self, "_ir_vars") else "---"),
-                    ("Annulus", self._ir_vars["annulus"].get() if hasattr(self, "_ir_vars") else "---"),
-                    ("Features", self._ir_vars["features"].get() if hasattr(self, "_ir_vars") else "---"),
-                    ("Coverage", self._ir_vars["coverage"].get() if hasattr(self, "_ir_vars") else "---"),
-                    ("Quality", self._ir_vars["quality"].get() if hasattr(self, "_ir_vars") else "---"),
+                    ("ROI Status", self._safe_var_get(getattr(self, "_ir_vars", {}).get("status"))),
+                    ("Annulus", self._safe_var_get(getattr(self, "_ir_vars", {}).get("annulus"))),
+                    ("Features", self._safe_var_get(getattr(self, "_ir_vars", {}).get("features"))),
+                    ("Coverage", self._safe_var_get(getattr(self, "_ir_vars", {}).get("coverage"))),
+                    ("Quality", self._safe_var_get(getattr(self, "_ir_vars", {}).get("quality"))),
                 ],
             ),
             (
                 "CYCLOTORSION & ROTATION",
                 self._hex_to_bgr(self._colors.PUPIL),
                 [
-                    ("Torsion Angle", self._cyclo_vars["angle"].get() if hasattr(self, "_cyclo_vars") else "0.00 deg"),
-                    ("Direction", self._cyclo_vars["direction"].get() if hasattr(self, "_cyclo_vars") else "None"),
-                    ("Confidence", self._cyclo_vars["confidence"].get() if hasattr(self, "_cyclo_vars") else "---"),
-                    ("Agreed Streams", self._cyclo_vars["streams"].get() if hasattr(self, "_cyclo_vars") else "---"),
-                    ("Astigmatic Loss", self._cyclo_vars["loss"].get() if hasattr(self, "_cyclo_vars") else "0.0%"),
-                    ("Baseline Status", self._cyclo_vars["baseline"].get() if hasattr(self, "_cyclo_vars") else "---"),
+                    ("Torsion Angle", self._safe_var_get(getattr(self, "_cyclo_vars", {}).get("angle"), "0.00 deg")),
+                    ("Direction", self._safe_var_get(getattr(self, "_cyclo_vars", {}).get("direction"), "None")),
+                    ("Confidence", self._safe_var_get(getattr(self, "_cyclo_vars", {}).get("confidence"))),
+                    ("Agreed Streams", self._safe_var_get(getattr(self, "_cyclo_vars", {}).get("streams"))),
+                    ("Astigmatic Loss", self._safe_var_get(getattr(self, "_cyclo_vars", {}).get("loss"), "0.0%")),
+                    ("Baseline Status", self._safe_var_get(getattr(self, "_cyclo_vars", {}).get("baseline"))),
                 ],
             ),
             (
                 "PROCESSING",
                 self._hex_to_bgr(self._colors.PROCESSING),
                 [
-                    ("Proc. Time", self._proc_time_var.get()),
-                    ("Latency", self._latency_var.get()),
-                    ("Latency Avg", self._latency_avg_var.get()),
-                    ("Dropped/Stale", self._drop_var.get()),
-                    ("Tracking", self._tracking_state_var.get()),
-                    ("FPS", self._fps_var.get()),
-                    ("Frame", self._frame_var.get()),
-                    ("Image Size", self._image_size_var.get()),
-                    ("Pipeline", self._pipeline_var.get()),
-                    ("Grayscale", self._gray_mode_var_display.get()),
+                    ("Proc. Time", self._safe_var_get(getattr(self, "_proc_time_var", None))),
+                    ("Latency", self._safe_var_get(getattr(self, "_latency_var", None))),
+                    ("Latency Avg", self._safe_var_get(getattr(self, "_latency_avg_var", None))),
+                    ("Dropped/Stale", self._safe_var_get(getattr(self, "_drop_var", None))),
+                    ("Tracking", self._safe_var_get(getattr(self, "_tracking_state_var", None))),
+                    ("FPS", self._safe_var_get(getattr(self, "_fps_var", None))),
+                    ("Frame", self._safe_var_get(getattr(self, "_frame_var", None))),
+                    ("Image Size", self._safe_var_get(getattr(self, "_image_size_var", None))),
+                    ("Pipeline", self._safe_var_get(getattr(self, "_pipeline_var", None))),
+                    ("Grayscale", self._safe_var_get(getattr(self, "_gray_mode_var_display", None))),
                 ],
             ),
         ]
@@ -1286,8 +1333,13 @@ class PupilTrackingGUI:
         fg_primary = self._hex_to_bgr(self._colors.FG_PRIMARY)
         fg_secondary = self._hex_to_bgr(self._colors.FG_SECONDARY)
         card_bg = self._hex_to_bgr(self._colors.BG_TERTIARY)
+        q_val = self._safe_var_get(self._summary_quality_var, "---")
+        t_val = self._safe_var_get(self._summary_tracking_var, "---")
+        l_val = self._safe_var_get(self._summary_latency_var, "---")
+        p_val = self._safe_var_get(self._summary_pipeline_var, "---")
+
         quality_color = self._hex_to_bgr(
-            _QUALITY_COLORS.get(self._summary_quality_var.get(), self._colors.FG_PRIMARY)
+            _QUALITY_COLORS.get(q_val, self._colors.FG_PRIMARY)
         )
         tracking_color = self._hex_to_bgr(
             {
@@ -1297,14 +1349,14 @@ class PupilTrackingGUI:
                 "No Detection": self._colors.INSUFFICIENT,
                 "Ready": self._colors.ACCENT,
                 "Waiting": self._colors.FG_SECONDARY,
-            }.get(self._summary_tracking_var.get(), self._colors.FG_PRIMARY)
+            }.get(t_val, self._colors.FG_PRIMARY)
         )
 
         summaries = [
-            ("QUALITY", self._summary_quality_var.get(), quality_color),
-            ("TRACKING", self._summary_tracking_var.get(), tracking_color),
-            ("LATENCY", self._summary_latency_var.get(), fg_primary),
-            ("PIPELINE", self._summary_pipeline_var.get(), fg_primary),
+            ("QUALITY", q_val, quality_color),
+            ("TRACKING", t_val, tracking_color),
+            ("LATENCY", l_val, fg_primary),
+            ("PIPELINE", p_val, fg_primary),
         ]
         for idx, (label, value, color) in enumerate(summaries):
             row = idx // 2
@@ -1682,20 +1734,35 @@ class PupilTrackingGUI:
         )
         self._gray_btn.pack(side=tk.LEFT, padx=2)
 
-        ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
         self._roi_btn = ttk.Button(
             toolbar,
-            text="ROI",
+            text="🎯 Set ROI",
             command=self._toggle_roi,
         )
         self._roi_btn.pack(side=tk.LEFT, padx=2)
 
+        self._clear_roi_btn = ttk.Button(
+            toolbar,
+            text="✖ Clear ROI",
+            command=self._clear_manual_roi,
+            state=tk.DISABLED,
+        )
+        self._clear_roi_btn.pack(side=tk.LEFT, padx=2)
+
         self._ring_btn = ttk.Button(
             toolbar,
-            text="Ring",
+            text="⭕ Set Ring",
             command=self._toggle_ring,
         )
         self._ring_btn.pack(side=tk.LEFT, padx=2)
+
+        self._clear_ring_btn = ttk.Button(
+            toolbar,
+            text="✖ Clear Ring",
+            command=self._clear_manual_ring,
+            state=tk.DISABLED,
+        )
+        self._clear_ring_btn.pack(side=tk.LEFT, padx=2)
 
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=5)
         _csv_btn = ttk.Button(toolbar, text="Export CSV", command=lambda: [self._export_csv(), self._toolbar_set_active(_csv_btn)])
@@ -2656,7 +2723,7 @@ class PupilTrackingGUI:
         self._kp_display.set(f"{float(self._kalman_process_var.get()):.3f}")
         self._km_display.set(f"{float(self._kalman_measure_var.get()):.3f}")
 
-        runtime_restart_reasons = {"pipeline", "engine", "resolution", "stride", "roi", "tracking"}
+        runtime_restart_reasons = {"pipeline", "engine", "resolution"}
         restart_required = bool(reasons.intersection(runtime_restart_reasons))
 
         if hasattr(self.cfg, "video"):
@@ -3088,7 +3155,12 @@ class PupilTrackingGUI:
         self._summary_tracking_label.config(foreground=tracking_color)
 
     def _toggle_pause(self) -> None:
-        if self._awaiting_roi or not self._video_running:
+        if self._awaiting_roi:
+            self._confirm_roi_selection()
+            if self._awaiting_roi:
+                self._clear_manual_roi()
+            return
+        if not self._video_running:
             return
         self._video_paused = not self._video_paused
         if self._video_paused:
@@ -3100,31 +3172,50 @@ class PupilTrackingGUI:
 
     def _sync_roi_ring_button_styles(self) -> None:
         if hasattr(self, "_roi_btn"):
-            is_active = self._roi_edit_active or self._manual_roi is not None
-            self._roi_btn.configure(style="ROIActive.TButton" if is_active else "TButton")
-            self._roi_btn.config(text="Clear ROI" if is_active else "ROI")
+            if self._roi_edit_active:
+                self._roi_btn.configure(style="ROIActive.TButton")
+                self._roi_btn.config(text="✓ Lock ROI")
+            elif self._manual_roi is not None:
+                self._roi_btn.configure(style="ROIActive.TButton")
+                self._roi_btn.config(text="✏ Adjust ROI")
+            else:
+                self._roi_btn.configure(style="TButton")
+                self._roi_btn.config(text="🎯 Set ROI")
+        if hasattr(self, "_clear_roi_btn"):
+            can_clear = self._roi_edit_active or self._manual_roi is not None
+            self._clear_roi_btn.config(state=tk.NORMAL if can_clear else tk.DISABLED)
+
         if hasattr(self, "_ring_btn"):
-            is_active = self._ring_edit_active or self._manual_ring is not None
-            self._ring_btn.configure(style="RingActive.TButton" if is_active else "TButton")
-            self._ring_btn.config(text="Clear Ring" if is_active else "Ring")
+            if self._ring_edit_active:
+                self._ring_btn.configure(style="RingActive.TButton")
+                self._ring_btn.config(text="✓ Lock Ring")
+            elif self._manual_ring is not None:
+                self._ring_btn.configure(style="RingActive.TButton")
+                self._ring_btn.config(text="✏ Adjust Ring")
+            else:
+                self._ring_btn.configure(style="TButton")
+                self._ring_btn.config(text="⭕ Set Ring")
+        if hasattr(self, "_clear_ring_btn"):
+            can_clear = self._ring_edit_active or self._manual_ring is not None
+            self._clear_ring_btn.config(state=tk.NORMAL if can_clear else tk.DISABLED)
 
     def _toggle_roi(self) -> None:
-        """Single toggle: if ROI is active/editing → clear it; otherwise begin selection."""
-        if self._roi_edit_active or self._manual_roi is not None:
-            self._clear_manual_roi()
+        """Toggle ROI: if currently editing → lock/confirm ROI; otherwise begin/adjust selection."""
+        if self._roi_edit_active:
+            self._confirm_roi_selection()
         else:
             self._begin_roi_selection()
 
     def _toggle_ring(self) -> None:
-        """Single toggle: if ring is active/editing → clear it; otherwise begin selection."""
-        if self._ring_edit_active or self._manual_ring is not None:
-            self._clear_manual_ring()
+        """Toggle Ring: if currently editing → lock/confirm ring; otherwise begin/adjust selection."""
+        if self._ring_edit_active:
+            self._confirm_ring_selection()
         else:
             self._begin_ring_selection()
 
     def _begin_roi_selection(self) -> None:
         if self._current_image is None:
-            self._status_var.set("Start the camera, then drag a circular ROI on the image")
+            self._status_var.set("Start the camera or video, then set a circular ROI")
             return
         if self._ring_edit_active:
             self._cancel_ring_selection()
@@ -3139,10 +3230,28 @@ class PupilTrackingGUI:
             self._roi_preview = dict(active_roi)
         else:
             h, w = self._current_image.shape[:2]
-            radius = 939.0 / 2.0
+            cx = w / 2.0
+            cy = h / 2.0
+            radius = max(40.0, min(w, h) * 0.38)
+            if self._current_result is not None:
+                if getattr(self._current_result, "limbus", None) and getattr(self._current_result.limbus, "ellipse", None):
+                    le = self._current_result.limbus.ellipse
+                    cx = float(le.center_x)
+                    cy = float(le.center_y)
+                    if getattr(le, "semi_major", 0) > 10:
+                        radius = max(40.0, float(le.semi_major) * 1.5)
+                elif getattr(self._current_result, "pupil", None) and getattr(self._current_result.pupil, "ellipse", None):
+                    pe = self._current_result.pupil.ellipse
+                    cx = float(pe.center_x)
+                    cy = float(pe.center_y)
+                    if getattr(pe, "semi_major", 0) > 10:
+                        radius = max(40.0, float(pe.semi_major) * 2.5)
+            max_r = min(cx, cy, w - cx, h - cy)
+            if max_r > 20.0:
+                radius = min(radius, max_r)
             self._roi_preview = {
-                "center_x": w / 2.0,
-                "center_y": h / 2.0,
+                "center_x": cx,
+                "center_y": cy,
                 "radius": radius,
                 "frame_width": float(w),
                 "frame_height": float(h),
@@ -3151,7 +3260,7 @@ class PupilTrackingGUI:
         self._sync_roi_ring_button_styles()
         self._roi_status_var.set("Manual ROI: Editing")
         self._status_var.set(
-            "ROI edit mode: drag inside to move, drag rim to resize, Enter to apply, Esc to cancel"
+            "ROI edit mode: drag inside to move, rim to resize, Enter/Lock to apply, Esc to cancel"
         )
         self._refresh_display()
 
@@ -3196,14 +3305,18 @@ class PupilTrackingGUI:
             self._roi_var.set(False)
         finally:
             self._suspend_live_settings_apply = previous_suspend
-        if self._video_running:
-            self._awaiting_roi = True
-            self._status_var.set("Video waiting — set an ROI to resume detection")
-        if self._current_result is not None:
-            self._current_result = None
         if self._opt_processor is not None:
             self._opt_processor.clear_manual_roi()
             self._opt_processor.update_runtime_settings(enable_auto_roi=False)
+        if self._awaiting_roi:
+            self._awaiting_roi = False
+            if self._pending_detection_start is not None:
+                start = self._pending_detection_start
+                self._pending_detection_start = None
+                self._pause_btn.config(state=tk.NORMAL, text="⏸ Pause")
+                start()
+        else:
+            self._status_var.set("Manual ROI cleared — full-frame detection active")
         self._refresh_display()
 
     def _clear_manual_ring(self) -> None:
@@ -3289,18 +3402,31 @@ class PupilTrackingGUI:
         if self._ring_edit_active:
             self._handle_ring_canvas_press(event)
             return
-        if not self._roi_edit_active:
-            return
-        point = self._canvas_to_image_point(event.x, event.y)
 
+        point = self._canvas_to_image_point(event.x, event.y)
         if point is None or self._current_image is None:
             return
+
+        # If ROI is not actively in edit mode, check if clicking on/near active ROI to enter edit mode
+        if not self._roi_edit_active:
+            if self._manual_roi is not None:
+                cx = self._manual_roi["center_x"]
+                cy = self._manual_roi["center_y"]
+                r = self._manual_roi["radius"]
+                if math.hypot(point[0] - cx, point[1] - cy) <= r + max(15.0, r * 0.25):
+                    self._begin_roi_selection()
+                else:
+                    return
+            else:
+                return
+
         if self._roi_preview is None:
             h, w = self._current_image.shape[:2]
+            radius = max(30.0, min(w, h) * 0.38)
             self._roi_preview = {
                 "center_x": point[0],
                 "center_y": point[1],
-                "radius": 939.0 / 2.0,
+                "radius": radius,
                 "frame_width": float(w),
                 "frame_height": float(h),
             }
@@ -3309,7 +3435,7 @@ class PupilTrackingGUI:
         cy = self._roi_preview["center_y"]
         radius = self._roi_preview["radius"]
         distance = math.hypot(point[0] - cx, point[1] - cy)
-        rim_threshold = max(10.0, radius * 0.18)
+        rim_threshold = max(12.0, radius * 0.20)
 
         if abs(distance - radius) <= rim_threshold:
             self._roi_drag_mode = "resize"
@@ -3317,10 +3443,13 @@ class PupilTrackingGUI:
             self._roi_drag_mode = "move"
             self._roi_drag_offset = (point[0] - cx, point[1] - cy)
         else:
-            self._roi_drag_mode = "resize"
-            self._roi_preview["center_x"] = point[0]
-            self._roi_preview["center_y"] = point[1]
-            self._roi_preview["radius"] = max(12.0, radius * 0.5)
+            h, w = self._current_image.shape[:2]
+            new_cx = float(np.clip(point[0], radius, w - radius))
+            new_cy = float(np.clip(point[1], radius, h - radius))
+            self._roi_preview["center_x"] = new_cx
+            self._roi_preview["center_y"] = new_cy
+            self._roi_drag_mode = "move"
+            self._roi_drag_offset = (0.0, 0.0)
         self._refresh_display()
 
     def _on_canvas_drag(self, event: Any) -> None:
@@ -3349,6 +3478,13 @@ class PupilTrackingGUI:
             max_radius = min(cx, cy, w - cx, h - cy)
             radius = max(8.0, math.hypot(point[0] - cx, point[1] - cy))
             self._roi_preview["radius"] = float(max(8.0, min(radius, max_radius)))
+        if self._opt_processor is not None:
+            self._opt_processor.set_manual_roi(
+                center_x=self._roi_preview["center_x"],
+                center_y=self._roi_preview["center_y"],
+                radius=self._roi_preview["radius"],
+                frame_shape=self._current_image.shape,
+            )
         self._refresh_display()
 
     def _on_canvas_release(self, event: Any) -> None:
@@ -3361,8 +3497,15 @@ class PupilTrackingGUI:
         self._roi_drag_offset = (0.0, 0.0)
         self._canvas.configure(cursor="fleur")
         if self._roi_preview is not None:
+            if self._opt_processor is not None and self._current_image is not None:
+                self._opt_processor.set_manual_roi(
+                    center_x=self._roi_preview["center_x"],
+                    center_y=self._roi_preview["center_y"],
+                    radius=self._roi_preview["radius"],
+                    frame_shape=self._current_image.shape,
+                )
             self._status_var.set(
-                "ROI ready. Drag to refine, press Enter to apply, or Esc to cancel"
+                "ROI ready. Drag to refine, click 'Lock ROI' or press Enter to apply, or Esc to cancel"
             )
         self._refresh_display()
 
@@ -3856,10 +3999,13 @@ class PupilTrackingGUI:
             self._ring_drag_mode = "move"
             self._ring_drag_offset = (point[0] - cx, point[1] - cy)
         else:
-            self._ring_drag_mode = "resize"
-            self._ring_preview["center_x"] = point[0]
-            self._ring_preview["center_y"] = point[1]
-            self._ring_preview["radius"] = max(12.0, radius * 0.5)
+            h, w = self._current_image.shape[:2]
+            new_cx = float(np.clip(point[0], radius, w - radius))
+            new_cy = float(np.clip(point[1], radius, h - radius))
+            self._ring_preview["center_x"] = new_cx
+            self._ring_preview["center_y"] = new_cy
+            self._ring_drag_mode = "move"
+            self._ring_drag_offset = (0.0, 0.0)
         self._refresh_display()
 
     def _handle_ring_canvas_drag(self, event: Any) -> None:
@@ -3926,7 +4072,7 @@ class PupilTrackingGUI:
     def _get_manual_roi_crop(
         self, frame: np.ndarray
     ) -> Optional[Tuple[np.ndarray, float, float]]:
-        roi = self._active_manual_roi()
+        roi = self._roi_preview if (self._roi_edit_active and self._roi_preview is not None) else self._active_manual_roi()
         if roi is None:
             return None
         h, w = frame.shape[:2]
@@ -4071,13 +4217,13 @@ class PupilTrackingGUI:
         self._current_image = first_frame
         self._awaiting_roi = True
         self._pending_detection_start = start_callable
-        self._pause_btn.config(state=tk.DISABLED, text="⏸ Pause")
+        self._pause_btn.config(state=tk.NORMAL, text="▶ Play")
         self._progress_label_var.set("Waiting for ROI")
         self._refresh_display()
         # Auto-enter ROI drawing so the circle is immediately draggable.
         self._begin_roi_selection()
         self._status_var.set(
-            f"{label} loaded — drag the ROI and press Enter to start detection"
+            f"{label} loaded — drag the ROI and click 'Lock ROI' or '▶ Play' to start"
         )
 
     def _start_video(self, source: Any) -> None:
@@ -4106,11 +4252,19 @@ class PupilTrackingGUI:
         self._last_iris_res = None
         self._video_total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         cap_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        if cap_fps <= 0 or cap_fps > 120 or math.isnan(cap_fps):
+            cap_fps = 30.0
+        self._video_source_fps = float(cap_fps)
         # Automatic Adaptive Adjustment with a 15 FPS Target Floor for Cyclotorsion:
         # Guarantees video processing and cyclotorsion do not bottleneck on high frame rates.
         target_floor_fps = 15.0
         adaptive_stride = max(1, round(cap_fps / target_floor_fps))
-        self._stride_var.set(adaptive_stride)
+        prev_suspend = self._suspend_live_settings_apply
+        self._suspend_live_settings_apply = True
+        try:
+            self._stride_var.set(adaptive_stride)
+        finally:
+            self._suspend_live_settings_apply = prev_suspend
         self._target_fps_var.set(max(15.0, float(self._target_fps_var.get() or 20.0)))
         self._video_start_time = time.monotonic()
         self._last_display_update = 0.0
@@ -4170,6 +4324,7 @@ class PupilTrackingGUI:
             if self._video_paused or self._awaiting_roi:
                 time.sleep(0.05)
                 continue
+            t_frame_start = time.monotonic()
             ret, frame = self._video_cap.read()
             if not ret:
                 if not self._camera_mode:
@@ -4206,11 +4361,10 @@ class PupilTrackingGUI:
                 self.root.after(0, self._update_progress, raw_frame_idx, True)
                 continue
             manual_crop = self._get_manual_roi_crop(frame)
-            if manual_crop is None:
-                self._current_result = None
-                self.root.after(0, self._update_progress, raw_frame_idx, True)
-                continue
-            crop, roi_x, roi_y = manual_crop
+            if manual_crop is not None:
+                crop, roi_x, roi_y = manual_crop
+            else:
+                crop, roi_x, roi_y = frame, 0.0, 0.0
             self._sync_calibration_to_detector()
             result = self._detector.detect_video_frame(
                 crop,
@@ -4302,6 +4456,15 @@ class PupilTrackingGUI:
                 self.root.after(0, self._on_classic_frame, smoothed)
             self.root.after(0, self._update_progress, raw_frame_idx, True)
 
+            # Playback pacing for video files (preserves real-time duration)
+            if not self._camera_mode:
+                source_fps = getattr(self, "_video_source_fps", 30.0) or 30.0
+                dt_target = stride / max(1.0, source_fps)
+                dt_elapsed = time.monotonic() - t_frame_start
+                sleep_s = dt_target - dt_elapsed
+                if sleep_s > 0.001:
+                    time.sleep(sleep_s)
+
     def _on_classic_frame(self, result: Any) -> None:
         self._update_measurements(result)
         self._fps_var.set("---")
@@ -4377,6 +4540,7 @@ class PupilTrackingGUI:
                     if self._video_paused or self._awaiting_roi:
                         time.sleep(0.05)
                         continue
+                    t_frame_start = time.monotonic()
                     try:
                         item = frame_queue.get(timeout=5.0)
                     except _queue.Empty:
@@ -4461,6 +4625,15 @@ class PupilTrackingGUI:
                             _fps,
                         )
                     self.root.after(0, self._update_progress, raw_frame_idx, True)
+
+                    # Playback pacing for video files (preserves real-time duration)
+                    if not self._camera_mode:
+                        source_fps = getattr(self, "_video_source_fps", 30.0) or 30.0
+                        dt_target = stride / max(1.0, source_fps)
+                        dt_elapsed = time.monotonic() - t_frame_start
+                        sleep_s = dt_target - dt_elapsed
+                        if sleep_s > 0.001:
+                            time.sleep(sleep_s)
                     if pending_end:
                         self._video_running = False
                         self.root.after(
@@ -4495,6 +4668,7 @@ class PupilTrackingGUI:
             if self._video_paused or self._awaiting_roi:
                 time.sleep(0.05)
                 continue
+            t_frame_start = time.monotonic()
             ret, frame = self._video_cap.read()
             if not ret:
                 self._video_running = False
@@ -4562,6 +4736,15 @@ class PupilTrackingGUI:
                     _fps,
                 )
             self.root.after(0, self._update_progress, raw_frame_idx, True)
+
+            # Playback pacing for video files (preserves real-time duration)
+            if not self._camera_mode:
+                source_fps = getattr(self, "_video_source_fps", 30.0) or 30.0
+                dt_target = stride / max(1.0, source_fps)
+                dt_elapsed = time.monotonic() - t_frame_start
+                sleep_s = dt_target - dt_elapsed
+                if sleep_s > 0.001:
+                    time.sleep(sleep_s)
 
     def _on_optimized_video_frame(self, adapted: Any, fps: float) -> None:
         self._update_measurements(adapted)
@@ -7098,8 +7281,22 @@ class PupilTrackingGUI:
                     gs_label += " ✓ applied"
             self._gray_mode_var_display.set(gs_label)
 
-            if hasattr(self, "_gray_settings_status"):
-                self._gray_settings_status.set(f"Current: {gs_label}")
+            # Cache all measurement strings thread-safely for background recorder
+            for d in (self._pv, self._lv, self._ov, getattr(self, "_wtw_vars", {}), getattr(self, "_ir_vars", {}), getattr(self, "_cyclo_vars", {})):
+                for k, v in d.items():
+                    if v is not None:
+                        try:
+                            self._measurements_text_cache[id(v)] = str(v.get())
+                        except Exception:
+                            pass
+            for v in (self._summary_quality_var, self._summary_tracking_var, self._summary_latency_var, self._summary_pipeline_var,
+                      self._proc_time_var, self._latency_var, self._latency_avg_var, self._drop_var, self._tracking_state_var,
+                      self._fps_var, self._frame_var, self._image_size_var, self._pipeline_var, self._gray_mode_var_display):
+                if v is not None:
+                    try:
+                        self._measurements_text_cache[id(v)] = str(v.get())
+                    except Exception:
+                        pass
 
             self._update_details(result)
         except Exception as exc:

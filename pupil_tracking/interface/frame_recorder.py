@@ -205,7 +205,14 @@ class FrameRecorder:
                     # Sentinel: stop signal
                     break
 
-                frame, timestamp = frame_data
+                if isinstance(frame_data, tuple):
+                    frame, timestamp = frame_data
+                else:
+                    frame = frame_data
+                    timestamp = time.monotonic()
+
+                if frame is None:
+                    break
 
                 if frame.ndim == 2:
                     frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
