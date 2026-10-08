@@ -6,7 +6,13 @@ not for silently applying a treatment-axis correction.
 """
 import argparse
 import json
+import sys
 from pathlib import Path
+
+# Ensure repository root is on sys.path
+_repo_root = Path(__file__).resolve().parent.parent
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
 
 import cv2
 import numpy as np
@@ -37,8 +43,8 @@ def main():
     parser.add_argument("--reference", required=True, help="Seated Pentacam/IR image")
     parser.add_argument("--current", required=True, help="Post-dock/current ELITA image")
     parser.add_argument("--output-dir", required=True)
-    parser.add_argument("--laterality", choices=("OD", "OS"), required=True)
-    parser.add_argument("--eye-id", required=True)
+    parser.add_argument("--laterality", choices=("OD", "OS"), default="OD", help="Eye laterality (default: OD)")
+    parser.add_argument("--eye-id", default="AUTO", help="Patient / Eye identifier (default: AUTO)")
     args = parser.parse_args()
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=True)

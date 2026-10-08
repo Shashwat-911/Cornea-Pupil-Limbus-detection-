@@ -1824,9 +1824,9 @@ def _build_parser() -> argparse.ArgumentParser:
     cal_group.add_argument(
         "--calibration-mode",
         type=str,
-        default="FIXED_PIXEL_SCALE",
+        default="ANATOMICAL_ANCHOR",
         choices=["ANATOMICAL_ANCHOR", "FIXED_PIXEL_SCALE", "RING_REFLECTION"],
-        help="Calibration mode: ANATOMICAL_ANCHOR, FIXED_PIXEL_SCALE, RING_REFLECTION (default: FIXED_PIXEL_SCALE)",
+        help="Calibration mode: ANATOMICAL_ANCHOR, FIXED_PIXEL_SCALE, RING_REFLECTION (default: ANATOMICAL_ANCHOR)",
     )
     cal_group.add_argument(
         "--px-per-mm",
@@ -1838,9 +1838,9 @@ def _build_parser() -> argparse.ArgumentParser:
     cal_group.add_argument(
         "--corneal-diameter-mm",
         type=float,
-        default=12.0,
+        default=11.75,
         metavar="F",
-        help="Assumed horizontal corneal diameter in mm (default: 12.0)",
+        help="Assumed horizontal corneal diameter in mm (default: 11.75)",
     )
     cal_group.add_argument(
         "--ring-diameter-mm",

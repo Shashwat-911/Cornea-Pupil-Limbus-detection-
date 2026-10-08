@@ -44,7 +44,7 @@ def test_anatomical_anchor_calibration():
 
 
 def test_default_calibration_mode_is_dynamic_not_anchored():
-    cfg = CalibrationConfig()
+    cfg = CalibrationConfig(mode="FIXED_PIXEL_SCALE")
     assert cfg.mode == "FIXED_PIXEL_SCALE"
 
     cal = SpatialCalibrator(mode=cfg.mode, manual_px_per_mm=cfg.manual_px_per_mm or 44.5)

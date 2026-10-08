@@ -275,11 +275,11 @@ class PupilTrackingGUI:
         self._limbus_fill_alpha_var = tk.IntVar(value=0)
 
         # ── Modular Calibration Settings ──
-        init_mode = getattr(self.cfg.calibration, "mode", "FIXED_PIXEL_SCALE") if hasattr(self.cfg, "calibration") else "FIXED_PIXEL_SCALE"
+        init_mode = getattr(self.cfg.calibration, "mode", "ANATOMICAL_ANCHOR") if hasattr(self.cfg, "calibration") else "ANATOMICAL_ANCHOR"
         self._calibration_mode_var = tk.StringVar(value=init_mode)
         init_manual_px = float(getattr(self.cfg.calibration, "manual_px_per_mm", 58.2) or 58.2) if hasattr(self.cfg, "calibration") else 58.2
         self._fixed_scale_var = tk.DoubleVar(value=init_manual_px)
-        init_corneal = float(getattr(self.cfg.calibration, "corneal_diameter_mm", 12.0) or 12.0) if hasattr(self.cfg, "calibration") else 12.0
+        init_corneal = float(getattr(self.cfg.calibration, "corneal_diameter_mm", 11.75) or 11.75) if hasattr(self.cfg, "calibration") else 11.75
         self._corneal_ref_mm_var = tk.DoubleVar(value=init_corneal)
         init_ring = float(getattr(self.cfg.calibration, "suction_ring_diameter_mm", 9.4) or 9.4) if hasattr(self.cfg, "calibration") else 9.4
         self._ring_ref_mm_var = tk.DoubleVar(value=init_ring)
@@ -803,6 +803,64 @@ class PupilTrackingGUI:
             button.configure(style="ToolbarActive.TButton" if is_active else "TButton")
             button.config(state=tk.DISABLED if self._recorder.is_recording or not has_patient else tk.NORMAL)
 
+    @staticmethod
+    def _read_hvid_for_eye(patient_dir: Path, eye: str) -> Optional[float]:
+        """Read Pentacam HVID value for specified eye from patient directory."""
+        if not patient_dir or not patient_dir.exists():
+            return None
+        # Check eye-specific Pentacam folder first
+        p_val_file = patient_dir / eye / "Pentacam" / "pentacam_values.txt"
+        if p_val_file.is_file():
+            try:
+                for line in p_val_file.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line.startswith("hvid="):
+                        val_str = line.split("=", 1)[1].strip()
+                        if val_str:
+                            return float(val_str)
+            except Exception:
+                pass
+        # Check patient.txt
+        px_txt = patient_dir / "patient.txt"
+        if px_txt.is_file():
+            try:
+                key = f"hvid_{eye.lower()}="
+                for line in px_txt.read_text(encoding="utf-8").splitlines():
+                    line = line.strip()
+                    if line.startswith(key):
+                        val_str = line.split("=", 1)[1].strip()
+                        if val_str:
+                            return float(val_str)
+            except Exception:
+                pass
+        return None
+
+    def _auto_detect_patient_and_hvid(self, filepath: Path) -> None:
+        """Auto-detect eye laterality and Pentacam HVID from patient directory structure."""
+        p = filepath.resolve()
+        eye = None
+        patient_dir = None
+        if p.parent.name.upper() in ("OD", "OS"):
+            eye = p.parent.name.upper()
+            patient_dir = p.parent.parent
+        elif p.name.upper() in ("OD", "OS"):
+            eye = p.name.upper()
+            patient_dir = p.parent
+
+        if eye:
+            if hasattr(self, "_laterality_var"):
+                self._laterality_var.set(eye)
+            if hasattr(self, "_selected_eye_var") and not self._selected_eye_var.get():
+                self._selected_eye_var.set(eye)
+
+        if patient_dir and eye:
+            hvid_val = self._read_hvid_for_eye(patient_dir, eye)
+            if hvid_val is not None and 9.0 <= hvid_val <= 14.5:
+                self._corneal_ref_mm_var.set(hvid_val)
+                self._sync_calibration_to_detector()
+                log = getattr(self, "logger", None) or get_logger()
+                log.info("Auto-detected Pentacam HVID %.2f mm for %s from patient folder", hvid_val, eye)
+
     def _select_eye(self, eye: str) -> None:
         if self._recorder.is_recording or self._active_patient_dir is None:
             return
@@ -810,6 +868,16 @@ class PupilTrackingGUI:
         target = self._active_patient_dir / eye
         self._recording_location_var.set(f"Recording folder: {target}")
         self._patient_summary_var.set(f"PX: {self._patient_id_var.get()} — {self._patient_name_var.get()} | Eye: {eye}")
+
+        # Auto-import Pentacam HVID if available in patient folder
+        hvid_val = self._read_hvid_for_eye(self._active_patient_dir, eye)
+        if hvid_val is not None and 9.0 <= hvid_val <= 14.5:
+            self._corneal_ref_mm_var.set(hvid_val)
+            self._sync_calibration_to_detector()
+            log = getattr(self, "logger", None) or get_logger()
+            log.info("Auto-imported Pentacam HVID %.2f mm for %s", hvid_val, eye)
+            self._status_var.set(f"Loaded Pentacam HVID: {hvid_val:.2f} mm for {eye}")
+
         self._update_patient_controls()
 
     def _update_patient_controls(self) -> None:
@@ -1018,11 +1086,8 @@ class PupilTrackingGUI:
 
         # 2. Write composed UI overlay (image + measurements panel) to overlay recorder
         try:
-            if self._recorder.is_recording and self._current_image is not None:
-                display_image = self._prepare_recording_frame(
-                    self._current_image, self._current_result
-                )
-                composite = self._compose_capture_frame(display_image, self._current_result)
+            if self._recorder.is_recording:
+                composite = self._compose_capture_frame(frame, self._current_result)
                 self._recorder.write(composite)
                 return
         except Exception:
@@ -3947,6 +4012,7 @@ class PupilTrackingGUI:
         )
 
     def _load_and_detect_image(self, path: str) -> None:
+        self._auto_detect_patient_and_hvid(Path(path))
         image = cv2.imread(path)
         if image is None:
             messagebox.showerror("Error", f"Cannot read image: {path}")
@@ -4015,6 +4081,8 @@ class PupilTrackingGUI:
         )
 
     def _start_video(self, source: Any) -> None:
+        if isinstance(source, (str, Path)):
+            self._auto_detect_patient_and_hvid(Path(source))
         cap = cv2.VideoCapture(source)
         if not cap.isOpened():
             messagebox.showerror("Error", f"Cannot open: {source}")
@@ -4037,6 +4105,13 @@ class PupilTrackingGUI:
         self._last_iris_frame_key = None
         self._last_iris_res = None
         self._video_total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        # Automatic Adaptive Adjustment with a 15 FPS Target Floor for Cyclotorsion:
+        # Guarantees video processing and cyclotorsion do not bottleneck on high frame rates.
+        target_floor_fps = 15.0
+        adaptive_stride = max(1, round(cap_fps / target_floor_fps))
+        self._stride_var.set(adaptive_stride)
+        self._target_fps_var.set(max(15.0, float(self._target_fps_var.get() or 20.0)))
         self._video_start_time = time.monotonic()
         self._last_display_update = 0.0
         if self._video_total_frames > 0:
@@ -5809,6 +5884,15 @@ class PupilTrackingGUI:
         if not (getattr(self, "_enable_registration_var", None) and self._enable_registration_var.get()):
             return None
         if not getattr(result, "has_both", False):
+            if getattr(self, "_live_ref_result", None) is not None and getattr(self, "_last_cyclotorsion_result", None) is not None:
+                held_res = self._last_cyclotorsion_result
+                setattr(result, "cyclotorsion_deg", getattr(held_res, "torsion_deg", 0.0))
+                setattr(result, "cyclotorsion_direction", "Paused (Blink/Occluded)")
+                setattr(result, "cyclotorsion_confidence", 0.0)
+                setattr(result, "cyclotorsion_quality", "INSUFFICIENT")
+                setattr(result, "cyclotorsion_agreeing_streams", "0/0")
+                setattr(result, "cyclotorsion_loss_pct", getattr(result, "cyclotorsion_loss_pct", 0.0))
+                setattr(result, "cyclotorsion_baseline_frame", getattr(self, "_live_ref_frame_num", 0))
             return None
         if image is None or not isinstance(image, np.ndarray) or image.size == 0:
             return None
@@ -5821,29 +5905,55 @@ class PupilTrackingGUI:
                 log.warning("Could not initialize RegistrationEngine: %s", e)
                 return None
 
-        # Lock baseline reference if not yet acquired
+        # Lock baseline reference only when stable, in-focus clinical criteria are met
         if getattr(self, "_live_ref_image", None) is None or getattr(self, "_live_ref_result", None) is None:
-            q_val = getattr(getattr(result, "overall_quality", None), "value", str(getattr(result, "overall_quality", "")))
+            has_both = getattr(result, "has_both", False)
             conf = getattr(result, "overall_confidence", 0.0) or 0.0
-            if q_val in ("SURGICAL", "CLINICAL") or conf >= 0.70:
-                self._live_ref_image = image.copy()
-                self._live_ref_result = result
-                f_num = getattr(getattr(result, "metadata", None), "frame_number", 0) or 0
-                self._live_ref_frame_num = f_num
-                log.info("Intra-op cyclotorsion baseline locked at frame %d", f_num)
-                from pupil_tracking.utils.types import RegistrationResult, RegistrationQuality
-                n_streams = len(self._registration_engine.streams) if self._registration_engine else 2
-                res0 = RegistrationResult(
-                    valid=True,
-                    torsion_deg=0.0,
-                    confidence=1.0,
-                    quality=RegistrationQuality.SURGICAL,
-                    agreeing_streams=n_streams,
-                    active_streams=n_streams,
-                )
-                self._last_cyclotorsion_result = res0
-                self._attach_cyclotorsion_to_result(result, res0, image=image)
-                return res0
+            q_val = getattr(getattr(result, "overall_quality", None), "value", str(getattr(result, "overall_quality", "")))
+
+            # Validate optical sharpness and ensure eye is not occluded / blinking
+            is_sharp_and_open = False
+            lap_var = 0.0
+            if (
+                has_both
+                and getattr(result.limbus, "ellipse", None) is not None
+                and getattr(result.pupil, "ellipse", None) is not None
+            ):
+                le = result.limbus.ellipse
+                cx, cy, r = int(le.center_x), int(le.center_y), int(le.radius)
+                h, w = image.shape[:2]
+                y1, y2 = max(0, cy - r), min(h, cy + r)
+                x1, x2 = max(0, cx - r), min(w, cx + r)
+                if y2 > y1 and x2 > x1:
+                    eye_crop = cv2.cvtColor(image[y1:y2, x1:x2], cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image[y1:y2, x1:x2]
+                    lap_var = float(cv2.Laplacian(eye_crop, cv2.CV_64F).var())
+                    min_val = float(np.min(eye_crop))
+                    # Ensure eye is in focus (lap_var >= 80) and pupil aperture is open (dark center < 65)
+                    is_sharp_and_open = (lap_var >= 80.0) and (min_val < 65.0)
+
+            if has_both and is_sharp_and_open and (q_val in ("SURGICAL", "CLINICAL") or conf >= 0.50):
+                self._baseline_candidate_count = getattr(self, "_baseline_candidate_count", 0) + 1
+                if self._baseline_candidate_count >= 3:
+                    self._live_ref_image = image.copy()
+                    self._live_ref_result = result
+                    f_num = getattr(getattr(result, "metadata", None), "frame_number", 0) or 0
+                    self._live_ref_frame_num = f_num
+                    log.info("Intra-op cyclotorsion baseline locked at stable, focused frame %d (sharpness=%.1f)", f_num, lap_var)
+                    from pupil_tracking.utils.types import RegistrationResult, RegistrationQuality
+                    n_streams = len(self._registration_engine.streams) if self._registration_engine else 2
+                    res0 = RegistrationResult(
+                        valid=True,
+                        torsion_deg=0.0,
+                        confidence=1.0,
+                        quality=RegistrationQuality.SURGICAL,
+                        agreeing_streams=n_streams,
+                        active_streams=n_streams,
+                    )
+                    self._last_cyclotorsion_result = res0
+                    self._attach_cyclotorsion_to_result(result, res0, image=image)
+                    return res0
+            else:
+                self._baseline_candidate_count = 0
             return None
 
         frame_key = (id(result), getattr(getattr(result, "metadata", None), "frame_number", None))
@@ -5873,30 +5983,43 @@ class PupilTrackingGUI:
         if getattr(self, "_last_cyclotorsion_result", None) is not None:
             self._attach_cyclotorsion_to_result(result, self._last_cyclotorsion_result, image=image)
 
-        # Dispatch async registration calculation in background worker if not already busy
-        if not getattr(self, "_cyclo_worker_busy", False):
-            self._cyclo_worker_busy = True
-            ref_img = self._live_ref_image
-            ref_res = self._live_ref_result
-            curr_img = image.copy()
-            curr_res = result
+        # Automatic Adaptive Cyclotorsion Worker targeting 15 FPS Floor:
+        if not getattr(self, "_cyclo_worker_active", False):
+            self._cyclo_worker_active = True
+            self._pending_cyclo_task = None
+            self._cyclo_task_event = threading.Event()
 
-            def _worker():
-                try:
-                    reg_res = self._registration_engine.register(
-                        ref_img,
-                        curr_img,
-                        ref_res,
-                        curr_res,
-                    )
-                    self._last_cyclotorsion_result = reg_res
-                except Exception as ex:
-                    log.debug("Async live registration error: %s", ex)
-                finally:
-                    self._cyclo_worker_busy = False
+            def _persistent_cyclo_worker():
+                while getattr(self, "_video_running", True):
+                    self._cyclo_task_event.wait(timeout=0.1)
+                    if not self._cyclo_task_event.is_set():
+                        continue
+                    self._cyclo_task_event.clear()
+                    task = self._pending_cyclo_task
+                    if task is None:
+                        continue
+                    r_img, c_img, r_res, c_res = task
+                    try:
+                        t0 = time.perf_counter()
+                        reg_res = self._registration_engine.register(
+                            r_img,
+                            c_img,
+                            r_res,
+                            c_res,
+                        )
+                        self._last_cyclotorsion_result = reg_res
+                        dur = time.perf_counter() - t0
+                        self._cyclotorsion_fps = 1.0 / max(dur, 0.001)
+                    except Exception as ex:
+                        log.debug("Async live registration error: %s", ex)
 
-            t = threading.Thread(target=_worker, daemon=True, name="AsyncCyclotorsionWorker")
+            t = threading.Thread(target=_persistent_cyclo_worker, daemon=True, name="AsyncCyclotorsionWorker")
             t.start()
+
+        # Update pending task to freshest frame (zero backlog)
+        self._pending_cyclo_task = (self._live_ref_image, image.copy(), self._live_ref_result, result)
+        if hasattr(self, "_cyclo_task_event"):
+            self._cyclo_task_event.set()
 
         return self._last_cyclotorsion_result
 
@@ -5929,7 +6052,7 @@ class PupilTrackingGUI:
         self._live_ref_frame_num = 0
         self._last_cyclotorsion_result = None
         self._last_cyclo_frame_key = None
-        self._cyclo_worker_busy = False
+        self._pending_cyclo_task = None
         self._status_var.set("Cyclotorsion baseline cleared (will lock next stable frame)")
 
     def _draw_overlay_scaled(self, out: np.ndarray, result: Any, scale: float) -> None:
@@ -6906,8 +7029,12 @@ class PupilTrackingGUI:
 
                     self._cyclo_vars["angle"].set(f"{float(t_deg):+.2f}°")
                     self._cyclo_vars["direction"].set(f"{direction}")
-                    self._cyclo_vars["confidence"].set(f"{float(conf)*100:.1f}% ({q_str})")
-                    self._cyclo_vars["streams"].set(f"{streams} streams")
+                    if conf <= 0.0 or "Blink" in str(direction):
+                        self._cyclo_vars["confidence"].set("0.0% (Holding)")
+                        self._cyclo_vars["streams"].set("Paused")
+                    else:
+                        self._cyclo_vars["confidence"].set(f"{float(conf)*100:.1f}% ({q_str})")
+                        self._cyclo_vars["streams"].set(f"{streams} streams")
                     self._cyclo_vars["loss"].set(f"{float(loss_pct):.2f}% astig. loss")
                     base_str = f"Locked (Frame #{b_frame})" if b_frame > 0 else "Baseline Active"
                     self._cyclo_vars["baseline"].set(base_str)

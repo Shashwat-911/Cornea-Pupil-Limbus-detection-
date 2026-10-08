@@ -254,9 +254,9 @@ class CalibrationConfig:
         Whether to attempt auto-calibration from detected landmarks.
     """
 
-    mode: str = "FIXED_PIXEL_SCALE"
+    mode: str = "ANATOMICAL_ANCHOR"
     suction_ring_diameter_mm: float = 9.4
-    corneal_diameter_mm: float = 12.0
+    corneal_diameter_mm: float = 11.75
     manual_px_per_mm: Optional[float] = 58.2
     manual_mm_per_px: Optional[float] = None
     enable_auto_calibration: bool = True
